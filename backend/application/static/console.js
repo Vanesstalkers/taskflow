@@ -340,6 +340,7 @@ class Application {
     window.application = this;
   }
 
+
   clear() {
     const elements = this.controlBrowse.children;
     for (let i = elements.length - 2; i > 1; i--) {
@@ -372,6 +373,7 @@ class Application {
       this.scroller.scrollBottom();
     }, 0);
   }
+
 
   more(text = '') {
     const element = document.createElement('div');

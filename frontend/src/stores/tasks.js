@@ -2,18 +2,26 @@ import { defineStore } from "pinia";
 
 export const useTasksStore = defineStore("tasks", {
   state: () => ({
-    // Требуемая структура: { store: { task: { [taskId]: {...} } } }
+    // Требуемая структура: { store: { task: {...}, user: {...} } }
     store: {
       task: {},
+      user: {},
+      currentAccountId: "",
     },
   }),
   actions: {
-    setTasks(tasks) {
-      const normalized = {};
+    setTasksData({ tasks = [], users = [], currentAccountId = "" }) {
+      const normalizedTasks = {};
       for (const task of tasks) {
-        normalized[task.id] = task;
+        normalizedTasks[task.id] = task;
       }
-      this.store.task = normalized;
+      const normalizedUsers = { ...this.store.user };
+      for (const user of users) {
+        normalizedUsers[String(user.accountId)] = user;
+      }
+      this.store.task = normalizedTasks;
+      this.store.user = normalizedUsers;
+      this.store.currentAccountId = String(currentAccountId || this.store.currentAccountId || "");
     },
     addTask({ title, description }) {
       const id = Date.now();
