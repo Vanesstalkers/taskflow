@@ -14,7 +14,39 @@ declare global {
     const metasql: typeof _metasql;
   }
 
-  namespace api {}
+  namespace api {
+    interface StatusResult {
+      status: 'ok' | 'error';
+    }
+
+    interface TaskDto {
+      id: string;
+      title: string;
+      description: string;
+      status: 'todo' | 'inProgress' | 'done' | string;
+      createdAt: Date | null;
+      updatedAt: Date | null;
+    }
+
+    function tasksList(): Promise<{ tasks: TaskDto[] }>;
+
+    function taskMove(params: {
+      id: string;
+      direction: 'forward' | 'backward';
+    }): Promise<StatusResult & { changed: boolean }>;
+
+    function mongoInsertOne(params: {
+      collection: string;
+      document: Record<string, unknown>;
+    }): Promise<StatusResult>;
+
+    function mongoUpdateField(params: {
+      collection: string;
+      id: string;
+      field: string;
+      value: unknown;
+    }): Promise<StatusResult>;
+  }
 
   namespace lib {}
 
