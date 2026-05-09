@@ -46,6 +46,16 @@ declare global {
       field: string;
       value: unknown;
     }): Promise<StatusResult>;
+
+    /** Одна связь в мапе (например userLinks): add / remove по ключу targetId */
+    function updateLink(params: {
+      collection: string;
+      id: string;
+      linkField: string;
+      targetId: string;
+      action: 'add' | 'remove';
+      linkPayload?: Record<string, unknown>;
+    }): Promise<StatusResult>;
   }
 
   namespace lib {}

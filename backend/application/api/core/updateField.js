@@ -1,6 +1,7 @@
 ({
   access: 'public',
   method: async ({ collection, id, field, value }) => {
+    // return { status: 'error' };
     if (typeof collection !== 'string' || collection.length === 0) {
       throw new Error('Parameter "collection" must be a non-empty string');
     }
