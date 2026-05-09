@@ -1,5 +1,5 @@
 ({
-  usersCollection: 'account',
+  usersCollection: 'user',
   sessionsCollection: 'session',
 
   generateToken() {
@@ -46,24 +46,24 @@
     if (existing) {
       throw new Error('User already exists');
     }
-    const accountId = new npm.mongodb.ObjectId().toHexString();
+    const userId = new npm.mongodb.ObjectId().toHexString();
     const now = new Date();
     await db.mongodb.insertOne(api.auth.provider.usersCollection, {
-      accountId,
+      userId,
       login,
       password,
       fullName: fullName || '',
       createdAt: now,
       updatedAt: now,
     });
-    return { accountId };
+    return { userId };
   },
 
   async getUser(login) {
     return db.mongodb.findOne(api.auth.provider.usersCollection, { login });
   },
 
-  async getUserByAccountId(accountId) {
-    return db.mongodb.findOne(api.auth.provider.usersCollection, { accountId: String(accountId) });
+  async getUserByUserId(userId) {
+    return db.mongodb.findOne(api.auth.provider.usersCollection, { userId: String(userId) });
   },
 });

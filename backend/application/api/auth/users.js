@@ -3,25 +3,25 @@
   method: async ({ search = '', limit = 20 } = {}) => {
     const safeSearch = typeof search === 'string' ? search.trim() : '';
     const safeLimit = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 20;
-    const currentAccountId = context.session?.accountId ? String(context.session.accountId) : '';
+    const currentUserId = String(context.session.state.userId || '');
 
     if (!safeSearch || safeSearch.length < 3) {
-      if (!currentAccountId) return { users: [], currentAccountId };
+      if (!currentUserId) return { users: [], currentUserId };
       const currentUser = await db.mongodb.findOne(
-        'account',
-        { accountId: currentAccountId },
-        { projection: { _id: 0, accountId: 1, login: 1, fullName: 1 } },
+        'user',
+        { userId: currentUserId },
+        { projection: { _id: 0, userId: 1, login: 1, fullName: 1 } },
       );
-      if (!currentUser) return { users: [], currentAccountId };
+      if (!currentUser) return { users: [], currentUserId };
       return {
         users: [
           {
-            accountId: String(currentUser.accountId || ''),
+            userId: String(currentUser.userId || ''),
             login: currentUser.login || '',
             fullName: currentUser.fullName || '',
           },
         ],
-        currentAccountId,
+        currentUserId,
       };
     }
 
@@ -33,18 +33,18 @@
       ],
     };
 
-    const documents = await db.mongodb.find('account', query, {
-      projection: { _id: 0, accountId: 1, login: 1, fullName: 1 },
+    const documents = await db.mongodb.find('user', query, {
+      projection: { _id: 0, userId: 1, login: 1, fullName: 1 },
       sort: { login: 1 },
       limit: safeLimit,
     });
 
     const users = documents.map((document) => ({
-      accountId: String(document.accountId || ''),
+      userId: String(document.userId || ''),
       login: document.login || '',
       fullName: document.fullName || '',
     }));
 
-    return { users, currentAccountId };
+    return { users, currentUserId };
   },
 });

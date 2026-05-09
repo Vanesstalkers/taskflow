@@ -1,37 +1,48 @@
 ({
   access: 'public',
   method: async () => {
-    const documents = await db.mongodb.find('task', {}, { sort: { createdAt: -1 } });
+    const currentUserId = String(context.session.state.userId || '');
+    if (!currentUserId) {
+      return { tasks: [], users: [], currentUserId: '' };
+    }
+
+    const documents = await db.mongodb.find(
+      'task',
+      { [`userLinks.${currentUserId}`]: { $exists: true } },
+      { sort: { createdAt: -1 } },
+    );
     const tasks = documents.map((document) => ({
       id: String(document._id),
       title: document.title || '',
       description: document.description || '',
       status: document.status || 'todo',
-      assigneeAccountId: document.assigneeAccountId || '',
+      userLinks: document.userLinks || {},
       createdAt: document.createdAt || null,
       updatedAt: document.updatedAt || null,
     }));
-    const currentAccountId = context.session?.accountId ? String(context.session.accountId) : '';
-    const accountIds = new Set();
-    if (currentAccountId) accountIds.add(currentAccountId);
+
+    const userIds = new Set();
+    if (currentUserId) userIds.add(currentUserId);
     for (const task of tasks) {
-      if (task.assigneeAccountId) accountIds.add(String(task.assigneeAccountId));
+      for (const userId of Object.keys(task.userLinks || {})) {
+        if (userId) userIds.add(String(userId));
+      }
     }
 
     let users = [];
-    if (accountIds.size > 0) {
-      const accounts = await db.mongodb.find(
-        'account',
-        { accountId: { $in: Array.from(accountIds) } },
-        { projection: { _id: 0, accountId: 1, login: 1, fullName: 1 } },
+    if (userIds.size > 0) {
+      const usersData = await db.mongodb.find(
+        'user',
+        { userId: { $in: Array.from(userIds) } },
+        { projection: { _id: 0, userId: 1, login: 1, fullName: 1 } },
       );
-      users = accounts.map((account) => ({
-        accountId: String(account.accountId || ''),
-        login: account.login || '',
-        fullName: account.fullName || '',
+      users = usersData.map((user) => ({
+        userId: String(user.userId || ''),
+        login: user.login || '',
+        fullName: user.fullName || '',
       }));
     }
 
-    return { tasks, users, currentAccountId };
+    return { tasks, users, currentUserId };
   },
 });

@@ -6,22 +6,22 @@ export const useTasksStore = defineStore("tasks", {
     store: {
       task: {},
       user: {},
-      currentAccountId: "",
+      currentUserId: "",
     },
   }),
   actions: {
-    setTasksData({ tasks = [], users = [], currentAccountId = "" }) {
+    setTasksData({ tasks = [], users = [], currentUserId = "" }) {
       const normalizedTasks = {};
       for (const task of tasks) {
         normalizedTasks[task.id] = task;
       }
       const normalizedUsers = { ...this.store.user };
       for (const user of users) {
-        normalizedUsers[String(user.accountId)] = user;
+        normalizedUsers[String(user.userId)] = user;
       }
       this.store.task = normalizedTasks;
       this.store.user = normalizedUsers;
-      this.store.currentAccountId = String(currentAccountId || this.store.currentAccountId || "");
+      this.store.currentUserId = String(currentUserId || this.store.currentUserId || "");
     },
     addTask({ title, description }) {
       const id = Date.now();

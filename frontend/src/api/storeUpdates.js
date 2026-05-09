@@ -14,19 +14,10 @@ const subscribeStoreUpdates = async () => {
   const backend = getBackendState();
   if (!backend) return;
   const { api } = backend;
-  if (!api?.example?.on) return;
+  if (!api?.core?.on) return;
 
   // Expected event payload: { [collection]: { [id]: { ... } } }
-  api.example.on("store", applyStorePatch);
-
-  // Optional server-side subscription handshake.
-  if (api.example.subscribe) {
-    try {
-      await api.example.subscribe();
-    } catch {
-      // Ignore subscription failures; listener still stays attached.
-    }
-  }
+  api.core.on("updateStore", applyStorePatch);
 
   isSubscribed = true;
 };

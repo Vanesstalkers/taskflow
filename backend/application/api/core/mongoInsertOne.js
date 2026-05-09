@@ -13,14 +13,18 @@
       throw new Error('Parameter "document" must be an object');
     }
 
+    const currentUserId = String(context.session.state.userId || '');
+    let creator = document.creator || '';
+    if (!creator && currentUserId) creator = currentUserId;
     const data = {
       ...document,
       createdAt: document.createdAt || new Date(),
     };
+    if (creator) data.creator = creator;
 
     const result = await db.mongodb.insertOne(collection, data);
     const id = String(result.insertedId);
-    context.client.emit('example/store', {
+    context.client.emit('core/updateStore', {
       [collection]: {
         [id]: {
           id,

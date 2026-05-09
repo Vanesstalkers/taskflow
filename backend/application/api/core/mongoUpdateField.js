@@ -27,7 +27,7 @@
       throw new Error('Object not found');
     }
 
-    context.client.emit('example/store', {
+    context.client.emit('core/updateStore', {
       [collection]: {
         [id]: {
           id,
