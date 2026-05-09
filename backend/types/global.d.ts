@@ -40,7 +40,7 @@ declare global {
       document: Record<string, unknown>;
     }): Promise<StatusResult>;
 
-    function mongoUpdateField(params: {
+    function updateField(params: {
       collection: string;
       id: string;
       field: string;

@@ -15,6 +15,7 @@
       id: String(document._id),
       title: document.title || '',
       description: document.description || '',
+      taskType: document.taskType || 'feature',
       status: document.status || 'todo',
       userLinks: document.userLinks || {},
       createdAt: document.createdAt || null,
