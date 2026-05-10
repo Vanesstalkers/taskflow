@@ -12,7 +12,7 @@
       { sort: { createdAt: -1 } },
     );
     const tasks = documents.map((document) => ({
-      id: String(document._id),
+      _id: String(document._id),
       title: document.title || '',
       description: document.description || '',
       taskType: document.taskType || 'feature',
@@ -32,13 +32,21 @@
 
     let users = [];
     if (userIds.size > 0) {
-      const usersData = await db.mongodb.find(
-        'user',
-        { userId: { $in: Array.from(userIds) } },
-        { projection: { _id: 0, userId: 1, login: 1, fullName: 1 } },
-      );
+      const oidList = [];
+      for (const id of userIds) {
+        try {
+          oidList.push(new npm.mongodb.ObjectId(id));
+        } catch {
+          /* пропускаем невалидные ключи в userLinks */
+        }
+      }
+
+      const usersData =
+        oidList.length > 0
+          ? await db.mongodb.find('user', { _id: { $in: oidList } }, { projection: { login: 1, fullName: 1 } })
+          : [];
       users = usersData.map((user) => ({
-        userId: String(user.userId || ''),
+        _id: String(user._id || ''),
         login: user.login || '',
         fullName: user.fullName || '',
       }));

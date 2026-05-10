@@ -4,21 +4,21 @@
    * Добавляет или удаляет одну связь в объекте-мапе на документе (как userLinks: { [id]: { ... } }).
    * @param {{
    *   collection: string,
-   *   id: string,
+   *   _id: string,
    *   linkField: string,
    *   targetId: string,
    *   action: 'add' | 'remove',
    *   linkPayload?: Record<string, unknown>,
    * }} params
    */
-  method: async ({ collection, id, linkField, targetId, action, linkPayload }) => {
+  method: async ({ collection, _id, linkField, targetId, action, linkPayload, taskType }) => {
     if (typeof collection !== 'string' || collection.length === 0) {
       throw new Error('Parameter "collection" must be a non-empty string');
     }
     if (!/^[a-zA-Z0-9_-]+$/.test(collection)) {
       throw new Error('Invalid collection name');
     }
-    if (typeof id !== 'string' || id.length === 0) {
+    if (typeof _id !== 'string' || _id.length === 0) {
       throw new Error('Parameter "id" must be a non-empty string');
     }
     if (typeof linkField !== 'string' || linkField.length === 0) {
@@ -37,7 +37,6 @@
       throw new Error('Parameter "action" must be "add" or "remove"');
     }
 
-    const _id = new npm.mongodb.ObjectId(id);
     const updatedAt = new Date();
     const path = `${linkField}.${targetId}`;
 
@@ -55,7 +54,7 @@
       update = { $unset: { [path]: '' }, $set: { updatedAt } };
     }
 
-    const result = await db.mongodb.updateOne(collection, { _id }, update);
+    const result = await db.mongodb.updateOne(collection, { _id: new npm.mongodb.ObjectId(_id) }, update);
 
     if (result.matchedCount === 0) {
       throw new Error('Object not found');
@@ -63,15 +62,34 @@
 
     context.client.emit('core/updateStore', {
       [collection]: {
-        [id]: {
-          id,
-          [linkField]: {
-            [targetId]: action === 'add' ? payloadForAdd : null,
-          },
+        [_id]: {
+          [linkField]: { [targetId]: action === 'add' ? payloadForAdd : null },
           updatedAt,
         },
       },
     });
+
+    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema;
+    const linkCollection = schema?.[linkField]?.collection;
+
+    if (linkCollection) {
+      const document = await db.mongodb.findOne(
+        linkCollection,
+        { _id: new npm.mongodb.ObjectId(targetId) },
+        {
+          projection: {
+            ...Object.fromEntries(schema?.[linkField]?.fields?.map((field) => [field, 1]) || []),
+            ...domain.collections.getHiddenFields(linkCollection),
+          },
+        },
+      );
+
+      if (document) {
+        context.client.emit('core/updateStore', {
+          [linkCollection]: { [targetId]: { ...document, _id: String(document._id) } },
+        });
+      }
+    }
 
     return { status: 'ok' };
   },

@@ -37,11 +37,7 @@
     >
       {{ displayText }}
     </component>
-    <div
-      v-if="combinedError && !editing"
-      class="inline-edit-text__error text-caption text-error"
-      role="status"
-    >
+    <div v-if="combinedError && !editing" class="inline-edit-text__error text-caption text-error" role="status">
       {{ combinedError }}
     </div>
   </div>
@@ -49,8 +45,7 @@
 
 <script setup>
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
-import { getBackendState } from '../api/backend.js';
-import { saveField } from '../api/saveField.js';
+import { saveField } from '../utils/storeActions.js';
 
 const OUTLINE_FLASH_MS = 2000;
 
@@ -64,10 +59,10 @@ const props = defineProps({
   displayTag: { type: String, default: 'span' },
   displayClass: { type: String, default: '' },
   inputClass: { type: String, default: '' },
+  /** Идентификатор документа */
+  _id: { type: String, required: true },
   /** Коллекция MongoDB (core/updateField) */
   collection: { type: String, required: true },
-  /** Идентификатор документа */
-  id: { type: String, required: true },
   /** Имя поля для $set */
   field: { type: String, required: true },
   /**
@@ -182,8 +177,7 @@ const finishEdit = async () => {
   if (next === prev) return;
 
   saveErrorInternal.value = '';
-  const docId = String(props.id || '').trim();
-  if (!docId) {
+  if (!props._id) {
     saveErrorInternal.value = 'Не указан идентификатор записи';
     startErrorOutline();
     return;
@@ -197,13 +191,8 @@ const finishEdit = async () => {
 
   saving.value = true;
   try {
-    const api = getBackendState()?.api;
-    await saveField(api, {
-      collection: props.collection,
-      id: docId,
-      field: props.field,
-      value: next,
-    });
+    const { collection, _id, field } = props;
+    await saveField({ collection, _id, field, value: next });
     emit('update:modelValue', next);
     emit('saved', { value: next });
     startSuccessOutline();

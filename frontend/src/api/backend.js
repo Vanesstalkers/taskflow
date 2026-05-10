@@ -19,4 +19,6 @@ const initBackend = async () => {
 
 const getBackendState = () => state;
 
-export { initBackend, getBackendState };
+const getApi = () => state?.api;
+
+export { initBackend, getBackendState, getApi };

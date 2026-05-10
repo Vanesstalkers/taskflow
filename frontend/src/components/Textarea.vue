@@ -25,8 +25,7 @@
 
 <script setup>
 import { onUnmounted, ref, watch } from 'vue';
-import { getBackendState } from '../api/backend.js';
-import { saveField } from '../api/saveField.js';
+import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
 
@@ -35,10 +34,10 @@ const OUTLINE_FLASH_MS = 2000;
 const text = defineModel({ type: String, default: '' });
 
 const props = defineProps({
+  /** Идентификатор документа */
+  _id: { type: String, required: true },
   /** Коллекция MongoDB (как в core/updateField) */
   collection: { type: String, required: true },
-  /** Идентификатор документа */
-  id: { type: String, required: true },
   /** Имя поля для $set */
   field: { type: String, required: true },
   label: { type: String, default: '' },
@@ -113,23 +112,17 @@ async function persist() {
   const next = String(text.value).trim();
   if (next === lastCommitted.value) return;
 
-  const id = String(props.id || '').trim();
-  if (!id) {
+  if (!props._id) {
     saveError.value = 'Не указан идентификатор записи';
     flashError();
     return;
   }
 
-  const api = getBackendState()?.api;
   saving.value = true;
   saveError.value = '';
   try {
-    await saveField(api, {
-      collection: props.collection,
-      id,
-      field: props.field,
-      value: next,
-    });
+    const { collection, _id, field } = props;
+    await saveField({ collection, _id, field, value: next });
     lastCommitted.value = next;
     flashSuccess();
   } catch (error) {

@@ -35,10 +35,13 @@ declare global {
       direction: 'forward' | 'backward';
     }): Promise<StatusResult & { changed: boolean }>;
 
-    function mongoInsertOne(params: {
+    function addObject(params: {
       collection: string;
       document: Record<string, unknown>;
-    }): Promise<StatusResult>;
+      _id?: string;
+      linkField?: string;
+      linkPayload?: Record<string, unknown>;
+    }): Promise<StatusResult & { _id: string }>;
 
     function updateField(params: {
       collection: string;
@@ -56,6 +59,13 @@ declare global {
       action: 'add' | 'remove';
       linkPayload?: Record<string, unknown>;
     }): Promise<StatusResult>;
+
+    /** Поиск по коллекции; поля задаются в `domain.collections[collection].searchFields` */
+    function search(params: {
+      collection: string;
+      search?: string;
+      limit?: number;
+    }): Promise<{ items: Record<string, unknown>[]; currentUserId: string; collection: string }>;
   }
 
   namespace lib {}

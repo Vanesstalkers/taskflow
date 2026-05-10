@@ -4,7 +4,7 @@
       <v-container class="app-content py-8">
         <div class="d-flex align-center justify-space-between mb-4">
           <div>
-            <h1 class="text-h4 mb-1">Taskflow Kanban</h1>
+            <h1 class="text-h4 mb-1">{{ currentUserDisplay }}</h1>
             <p class="text-body-2 text-medium-emphasis">Статус backend: {{ status }}</p>
           </div>
           <v-btn color="primary" prepend-icon="mdi-plus" @click="dialog = true"> Новая задача </v-btn>
@@ -27,7 +27,7 @@
               <v-card-text class="column-body">
                 <v-card
                   v-for="task in tasksByStatus[column.id]"
-                  :key="task.id"
+                  :key="task._id"
                   class="mb-3 task-card"
                   variant="elevated"
                 >
@@ -68,20 +68,13 @@
               :disabled="creatingTask || taskTypeLoading"
               :loading="taskTypeLoading"
             />
-            <v-autocomplete
+            <ComplexBlock
               v-model="assigneeUserIds"
-              v-model:search="assigneeSearch"
-              label="Исполнитель"
-              variant="outlined"
+              remote-search
+              collection="user"
+              picker-label="Исполнитель"
               class="mt-3"
-              :items="assigneeOptions"
-              :loading="assigneeLoading"
               :disabled="creatingTask"
-              no-filter
-              multiple
-              chips
-              closable-chips
-              clearable
             />
           </v-card-text>
           <v-card-actions>
@@ -96,9 +89,6 @@
         <v-card>
           <v-card-title>Вход в систему</v-card-title>
           <v-card-text>
-            <v-alert v-if="authError" type="error" variant="tonal" class="mb-3">
-              {{ authError }}
-            </v-alert>
             <v-text-field
               v-model="authLogin"
               label="Логин"
@@ -128,6 +118,9 @@
               @keyup.enter="submitRegister"
             />
           </v-card-text>
+          <v-alert v-if="authError" type="error" variant="tonal" class="mb-3">
+            {{ authError }}
+          </v-alert>
           <v-card-actions>
             <v-btn variant="text" :disabled="authLoading" @click="submitRegister"> Зарегистрироваться </v-btn>
             <v-spacer />
@@ -153,13 +146,10 @@
         :can-move-left="canMoveLeft(selectedTask.status)"
         :can-move-right="canMoveRight(selectedTask.status)"
         :moving-task-id="movingTaskId"
-        :assignee-options="editAssigneeOptions"
-        :assignee-loading="editAssigneeLoading"
         v-model:description="editDescription"
         v-model:assignee-user-ids="editAssigneeUserIds"
-        v-model:assignee-search="editAssigneeSearch"
         @close="closeTaskDetail"
-        @move="(step) => moveTask(selectedTask.id, step)"
+        @move="(step) => moveTask(selectedTask._id, step)"
       />
     </v-navigation-drawer>
   </v-app>
@@ -168,9 +158,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { initBackend } from './api/backend.js';
-import { subscribeStoreUpdates } from './api/storeUpdates.js';
+import { subscribeStoreUpdates } from './utils/storeActions.js';
+import ComplexBlock from './components/ComplexBlock.vue';
 import TaskForm from './components/TaskForm.vue';
-import { useTasksStore } from './stores/tasks.js';
+import { useStore } from './stores/store.js';
 
 const status = ref('Инициализация...');
 const errorText = ref('');
@@ -187,17 +178,11 @@ const taskTypeOptions = ref([
 ]);
 const taskTypeLoading = ref(false);
 const assigneeUserIds = ref([]);
-const assigneeOptions = ref([]);
-const assigneeSearch = ref('');
-const assigneeLoading = ref(false);
 const creatingTask = ref(false);
 const detailDrawer = ref(false);
 const selectedTaskId = ref('');
 const editDescription = ref('');
 const editAssigneeUserIds = ref([]);
-const editAssigneeOptions = ref([]);
-const editAssigneeSearch = ref('');
-const editAssigneeLoading = ref(false);
 const movingTaskId = ref('');
 const authDialog = ref(false);
 const authLoading = ref(false);
@@ -205,7 +190,7 @@ const authLogin = ref('');
 const authPassword = ref('');
 const authFullName = ref([]);
 const authError = ref('');
-const tasksStore = useTasksStore();
+const globalStore = useStore();
 let api = null;
 let authResolve = null;
 
@@ -217,7 +202,7 @@ const columns = [
 
 const columnTitleByStatusId = Object.fromEntries(columns.map((column) => [column.id, column.title]));
 
-const taskList = computed(() => Object.values(tasksStore.store.task));
+const taskList = computed(() => Object.values(globalStore.store.task));
 
 const tasksByStatus = computed(() => ({
   todo: taskList.value.filter((task) => task.status === 'todo'),
@@ -229,16 +214,24 @@ const getColumnIndex = (statusId) => columns.findIndex((column) => column.id ===
 
 const canMoveLeft = (statusId) => getColumnIndex(statusId) > 0;
 const canMoveRight = (statusId) => getColumnIndex(statusId) < columns.length - 1;
-const currentUserId = computed(() => String(tasksStore.store.currentUserId || ''));
+const currentUserId = computed(() => String(globalStore.currentUserId || ''));
+const currentUserDisplay = computed(() => {
+  const user = globalStore.store.user?.[currentUserId.value];
+  if (!user) return '';
+  const login = String(user.login || '').trim();
+  const fullName = String(user.fullName || '').trim();
+  if (fullName && login) return `${fullName} (${login})`;
+  return fullName || login;
+});
 const getTaskMoveMethod = () => api?.core?.taskMove;
 const getTasksListMethod = () => api?.core?.tasksList;
-const getTaskCreateMethod = () => api?.core?.mongoInsertOne;
-const getUsersMethod = () => api?.auth?.users;
-const getTaskTypesMethod = () => api?.core?.taskTypes;
+const getTaskMethod = () => api?.core?.getTask;
+const getTaskCreateMethod = () => api?.core?.addObject;
+const getListMethod = () => api?.core?.list;
 const selectedTask = computed(() => {
   const id = selectedTaskId.value;
   if (!id) return null;
-  return tasksStore.store.task[id] || null;
+  return globalStore.store.task[id] || null;
 });
 
 const taskTypeLabelByValue = computed(
@@ -251,7 +244,7 @@ const moveTask = async (id, step) => {
     errorText.value = 'API taskMove недоступен';
     return;
   }
-  const task = tasksStore.store.task[id];
+  const task = globalStore.store.task[id];
   if (!task) return;
   const direction = step > 0 ? 'forward' : 'backward';
   errorText.value = '';
@@ -273,74 +266,64 @@ const closeDialog = () => {
   newTitle.value = '';
   newDescription.value = '';
   newTaskType.value = 'feature';
-  assigneeSearch.value = '';
   if (currentUserId.value) {
     assigneeUserIds.value = [currentUserId.value];
   }
 };
 
-const openTaskDetail = (task) => {
-  selectedTaskId.value = String(task.id);
+const openTaskDetail = async (task) => {
+  const rawId = task?._id;
+  const id = rawId != null && rawId !== '' ? String(rawId).trim() : '';
+  if (!id || id === 'undefined') return;
+  selectedTaskId.value = id;
   editDescription.value = task.description || '';
   const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
   editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
-  editAssigneeSearch.value = '';
   detailDrawer.value = true;
+  await loadTaskTypes();
+  await loadTask(id);
 };
 
 const closeTaskDetail = () => {
   detailDrawer.value = false;
   selectedTaskId.value = '';
-  editAssigneeSearch.value = '';
 };
 
-const loadEditUsers = async (search = '') => {
-  const appendSelectedUsers = (items) => {
-    const map = new Map(items.map((item) => [String(item.value), item]));
-    for (const userId of editAssigneeUserIds.value) {
-      const key = String(userId);
-      if (map.has(key)) continue;
-      const user = tasksStore.store.user[key];
-      if (!user) continue;
-      map.set(key, {
-        title: user.fullName ? `${user.fullName} (${user.login})` : user.login,
-        value: key,
-      });
-    }
-    return Array.from(map.values());
-  };
-
-  if (!search) {
-    const currentUser = tasksStore.store.user[currentUserId.value];
-    const items = currentUser
-      ? [
-          {
-            title: currentUser.fullName ? `${currentUser.fullName} (${currentUser.login})` : currentUser.login,
-            value: currentUserId.value,
-          },
-        ]
-      : [];
-    editAssigneeOptions.value = appendSelectedUsers(items);
-    return;
-  }
-  const usersMethod = getUsersMethod();
-  if (!usersMethod) return;
-  editAssigneeLoading.value = true;
+/** Снимок задачи + user/pp для панели формы (сервер, с проверкой доступа по userLinks). */
+const loadTask = async (_id) => {
+  const method = getTaskMethod();
+  const id = typeof _id === 'string' ? _id.trim() : String(_id ?? '').trim();
+  if (!method || !id || id === 'undefined') return;
+  errorText.value = '';
   try {
-    const response = await usersMethod({ search, limit: 20 });
-    const users = Array.isArray(response?.users) ? response.users : [];
-    const items = users.map((user) => ({
-      title: user.fullName ? `${user.fullName} (${user.login})` : user.login,
-      value: String(user.userId),
-    }));
-    editAssigneeOptions.value = appendSelectedUsers(items);
-    for (const user of users) {
-      tasksStore.store.user[String(user.userId)] = user;
+    const res = await method({ _id: id });
+    if (res?.error) {
+      if (res.error === 'not_found') {
+        errorText.value = 'Задача не найдена или нет доступа';
+        closeTaskDetail();
+      } else if (res.error === 'unauthorized') {
+        errorText.value = 'Требуется авторизация';
+      }
+      return;
     }
-  } catch {
-    // Keep previous options on transient request errors.
-  } finally {
-    editAssigneeLoading.value = false;
+    const patch = res?.store;
+    if (!patch || typeof patch !== 'object') return;
+    if (patch.task && typeof patch.task === 'object') {
+      Object.assign(globalStore.store.task, patch.task);
+    }
+    if (patch.user && typeof patch.user === 'object') {
+      Object.assign(globalStore.store.user, patch.user);
+    }
+    if (patch.pp && typeof patch.pp === 'object') {
+      Object.assign(globalStore.store.pp, patch.pp);
+    }
+    const task = globalStore.store.task[id];
+    if (!task) return;
+    editDescription.value = task.description || '';
+    const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
+    editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
+  } catch (error) {
+    errorText.value = error.message || 'Не удалось загрузить задачу';
   }
 };
 
@@ -352,7 +335,7 @@ const addTask = async () => {
   errorText.value = '';
   const createTask = getTaskCreateMethod();
   if (!createTask) {
-    errorText.value = 'API mongoInsertOne недоступен';
+    errorText.value = 'API addObject недоступен';
     return;
   }
 
@@ -379,12 +362,12 @@ const addTask = async () => {
 };
 
 const loadTaskTypes = async () => {
-  const taskTypesMethod = getTaskTypesMethod();
-  if (!taskTypesMethod) return;
+  const listMethod = getListMethod();
+  if (!listMethod) return;
   taskTypeLoading.value = true;
   try {
-    const response = await taskTypesMethod();
-    const taskTypes = Array.isArray(response?.taskTypes) ? response.taskTypes : [];
+    const response = await listMethod({ name: 'taskTypes' });
+    const taskTypes = Array.isArray(response?.items) ? response.items : [];
     const normalizedOptions = taskTypes
       .map((taskType) => ({
         title: String(taskType?.title || '').trim(),
@@ -404,62 +387,6 @@ const loadTaskTypes = async () => {
   }
 };
 
-const loadUsers = async (search = '') => {
-  const appendSelectedUsers = (items) => {
-    const map = new Map(items.map((item) => [String(item.value), item]));
-    for (const userId of assigneeUserIds.value) {
-      const key = String(userId);
-      if (map.has(key)) continue;
-      const user = tasksStore.store.user[key];
-      if (!user) continue;
-      map.set(key, {
-        title: user.fullName ? `${user.fullName} (${user.login})` : user.login,
-        value: key,
-      });
-    }
-    return Array.from(map.values());
-  };
-
-  if (!search) {
-    const currentUser = tasksStore.store.user[currentUserId.value];
-    const items = currentUser
-      ? [
-          {
-            title: currentUser.fullName ? `${currentUser.fullName} (${currentUser.login})` : currentUser.login,
-            value: currentUserId.value,
-          },
-        ]
-      : [];
-    assigneeOptions.value = appendSelectedUsers(items);
-    if (assigneeUserIds.value.length === 0 && currentUserId.value) {
-      assigneeUserIds.value = [currentUserId.value];
-    }
-    return;
-  }
-  const usersMethod = getUsersMethod();
-  if (!usersMethod) return;
-  assigneeLoading.value = true;
-  try {
-    const response = await usersMethod({ search, limit: 20 });
-    const users = Array.isArray(response?.users) ? response.users : [];
-    const items = users.map((user) => ({
-      title: user.fullName ? `${user.fullName} (${user.login})` : user.login,
-      value: String(user.userId),
-    }));
-    assigneeOptions.value = appendSelectedUsers(items);
-    for (const user of users) {
-      tasksStore.store.user[String(user.userId)] = user;
-    }
-    if (assigneeUserIds.value.length === 0 && currentUserId.value) {
-      assigneeUserIds.value = [currentUserId.value];
-    }
-  } catch {
-    // Keep previous options on transient request errors.
-  } finally {
-    assigneeLoading.value = false;
-  }
-};
-
 const tryRestoreSession = async () => {
   const token = localStorage.getItem('metarhia.session.token');
   if (!token || !api?.auth?.restore) return false;
@@ -469,12 +396,12 @@ const tryRestoreSession = async () => {
       const user = response?.user;
       if (user?.userId) {
         const userId = String(user.userId);
-        tasksStore.store.user[userId] = {
+        globalStore.store.user[userId] = {
           userId,
           login: user.login || '',
           fullName: user.fullName || '',
         };
-        tasksStore.store.currentUserId = userId;
+        globalStore.currentUserId = userId;
       }
       return true;
     }
@@ -511,12 +438,12 @@ const submitAuth = async () => {
       const user = response?.user;
       if (user?.userId) {
         const userId = String(user.userId);
-        tasksStore.store.user[userId] = {
+        globalStore.store.user[userId] = {
           userId,
           login: user.login || '',
           fullName: user.fullName || '',
         };
-        tasksStore.store.currentUserId = userId;
+        globalStore.currentUserId = userId;
       }
       localStorage.setItem('metarhia.session.token', response.token);
       authDialog.value = false;
@@ -554,12 +481,12 @@ const submitRegister = async () => {
       const user = response?.user;
       if (user?.userId) {
         const userId = String(user.userId);
-        tasksStore.store.user[userId] = {
+        globalStore.store.user[userId] = {
           userId,
           login: user.login || '',
           fullName: user.fullName || '',
         };
-        tasksStore.store.currentUserId = userId;
+        globalStore.currentUserId = userId;
       }
       localStorage.setItem('metarhia.session.token', response.token);
       authDialog.value = false;
@@ -586,18 +513,18 @@ onMounted(async () => {
       status.value = 'Требуется авторизация';
       await waitForAuth();
     }
-    await loadUsers();
     await subscribeStoreUpdates();
     const tasksList = getTasksListMethod();
     if (!tasksList) throw new Error('API tasksList недоступен');
     const response = await tasksList();
-    tasksStore.setTasksData({
-      tasks: response.tasks || [],
-      users: response.users || [],
+    globalStore.setData({
       currentUserId: response.currentUserId || '',
+      store: {
+        task: response.tasks || [],
+        user: response.users || [],
+      },
     });
     await loadTaskTypes();
-    await loadUsers();
     status.value = 'Подключено';
   } catch (error) {
     status.value = 'Недоступен';
@@ -608,46 +535,9 @@ onMounted(async () => {
 watch(dialog, async (opened) => {
   if (!opened) return;
   await loadTaskTypes();
-  await loadUsers(assigneeSearch.value);
   if (currentUserId.value) {
     assigneeUserIds.value = [currentUserId.value];
   }
-});
-
-watch(assigneeSearch, async (value) => {
-  if (!dialog.value) return;
-  const search = (value || '').trim();
-  if (search.length === 0) {
-    await loadUsers('');
-    return;
-  }
-  if (search.length < 3) return;
-  await loadUsers(search);
-});
-
-watch(assigneeUserIds, () => {
-  assigneeSearch.value = '';
-});
-
-watch(detailDrawer, async (opened) => {
-  if (!opened) return;
-  await loadTaskTypes();
-  await loadEditUsers(editAssigneeSearch.value);
-});
-
-watch(editAssigneeSearch, async (value) => {
-  if (!detailDrawer.value) return;
-  const search = (value || '').trim();
-  if (search.length === 0) {
-    await loadEditUsers('');
-    return;
-  }
-  if (search.length < 3) return;
-  await loadEditUsers(search);
-});
-
-watch(editAssigneeUserIds, () => {
-  editAssigneeSearch.value = '';
 });
 </script>
 

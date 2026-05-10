@@ -10,7 +10,7 @@
             :model-value="task.title || ''"
             empty-label="Без названия"
             collection="task"
-            :id="taskId"
+            :_id="taskId"
             field="title"
             :error-message="panelFieldErrors.title"
             :context-key="taskId"
@@ -29,7 +29,7 @@
       <v-btn
         size="small"
         variant="tonal"
-        :disabled="!canMoveLeft || movingTaskId === String(task.id)"
+        :disabled="!canMoveLeft || movingTaskId === String(taskId)"
         @click="$emit('move', -1)"
       >
         Назад
@@ -38,7 +38,7 @@
         size="small"
         color="primary"
         variant="tonal"
-        :disabled="!canMoveRight || movingTaskId === String(task.id)"
+        :disabled="!canMoveRight || movingTaskId === String(taskId)"
         @click="$emit('move', 1)"
       >
         Вперёд
@@ -53,51 +53,46 @@
     </v-tabs>
     <div class="task-detail-window mb-2">
       <div v-show="panelActiveTab === 'main'">
-        <Textarea
-          v-model="description"
-          collection="task"
-          :id="taskId"
-          field="description"
-          label="Описание"
-          rows="4"
-          :context-key="taskId"
-        />
+        <component :is="taskMainComponent" v-model:description="description" :task-id="taskId" :task="task" />
       </div>
       <div v-show="panelActiveTab === 'assignees'">
         <ComplexBlock
           v-model="assigneeUserIds"
-          v-model:search="assigneeSearch"
-          :items="assigneeOptions"
-          :loading="assigneeLoading"
+          remote-search
+          collection="user"
           :error="!!panelFieldErrors.assignees"
           :error-messages="panelFieldErrors.assignees ? [panelFieldErrors.assignees] : []"
           empty-text="Исполнители не выбраны"
           add-placeholder="Поиск по имени или логину (от 3 символов)"
-          link-collection="task"
-          :link-document-id="taskId"
-          link-map-field="userLinks"
+          parent-collection="task"
+          :parent-id="taskId"
+          link-field="userLinks"
           :min-selection="1"
           :context-key="taskId"
           @link-remove-error="panelFieldErrors.assignees = $event"
           @link-removed="panelFieldErrors.assignees = ''"
           @link-add-error="panelFieldErrors.assignees = $event"
           @link-added="panelFieldErrors.assignees = ''"
-        />
+          :show-create-new-option="false"
+        >
+          <template #label="{ id, record }">
+            <span>{{ record?.fullName || record?.login || id }}</span>
+          </template>
+        </ComplexBlock>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onUnmounted, watch } from 'vue';
+import { computed, onUnmounted, watch } from 'vue';
 import ComplexBlock from './ComplexBlock.vue';
 import InputInline from './InputInline.vue';
-import Textarea from './Textarea.vue';
+import { resolveTaskTypeMainComponent } from './tasks/registry.js';
 import { clearPanelFieldErrors, panelActiveTab, panelFieldErrors } from '../state/detailPanelState.js';
 
 const description = defineModel('description', { type: String, default: '' });
 const assigneeUserIds = defineModel('assigneeUserIds', { type: Array, default: () => [] });
-const assigneeSearch = defineModel('assigneeSearch', { type: String, default: '' });
 
 const props = defineProps({
   task: { type: Object, required: true },
@@ -107,11 +102,11 @@ const props = defineProps({
   canMoveLeft: { type: Boolean, default: false },
   canMoveRight: { type: Boolean, default: false },
   movingTaskId: { type: String, default: '' },
-  assigneeOptions: { type: Array, default: () => [] },
-  assigneeLoading: { type: Boolean, default: false },
 });
 
 defineEmits(['close', 'move']);
+
+const taskMainComponent = computed(() => resolveTaskTypeMainComponent(props.task?.taskType));
 
 watch(
   () => props.taskId,

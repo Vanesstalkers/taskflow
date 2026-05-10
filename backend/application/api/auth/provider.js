@@ -46,17 +46,15 @@
     if (existing) {
       throw new Error('User already exists');
     }
-    const userId = new npm.mongodb.ObjectId().toHexString();
     const now = new Date();
-    await db.mongodb.insertOne(api.auth.provider.usersCollection, {
-      userId,
+    const result = await db.mongodb.insertOne(api.auth.provider.usersCollection, {
       login,
       password,
       fullName: fullName || '',
       createdAt: now,
       updatedAt: now,
     });
-    return { userId };
+    return { userId: String(result.insertedId) };
   },
 
   async getUser(login) {
@@ -64,6 +62,12 @@
   },
 
   async getUserByUserId(userId) {
-    return db.mongodb.findOne(api.auth.provider.usersCollection, { userId: String(userId) });
+    let oid;
+    try {
+      oid = new npm.mongodb.ObjectId(String(userId));
+    } catch {
+      return null;
+    }
+    return db.mongodb.findOne(api.auth.provider.usersCollection, { _id: oid });
   },
 });

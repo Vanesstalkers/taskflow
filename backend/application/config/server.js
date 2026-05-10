@@ -8,7 +8,7 @@
     bind: 2000,
     start: 30000,
     stop: 5000,
-    request: 5000,
+    request: 5000 * 1000,
     watch: 1000,
     test: 60000,
   },

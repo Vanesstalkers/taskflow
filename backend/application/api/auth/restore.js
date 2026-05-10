@@ -6,7 +6,7 @@
       const user = await api.auth.provider.getUserByUserId(userId);
       if (!user) return null;
       return {
-        userId: String(user.userId || ''),
+        userId: String(user._id || ''),
         login: user.login || '',
         fullName: user.fullName || '',
       };

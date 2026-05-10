@@ -1,6 +1,16 @@
 ({
   statuses: ['todo', 'inProgress', 'done'],
 
+  defaultSchema: {
+    _id: '',
+    title: '',
+    description: '',
+    taskType: '',
+    status: '',
+    userLinks: { collection: 'user' },
+    docLinks: { collection: 'doc' },
+  },
+
   async move(id, direction) {
     if (typeof id !== 'string' || id.length === 0) {
       throw new Error('Parameter "id" must be a non-empty string');
