@@ -1,5 +1,5 @@
 async ({ streamId, name }) => {
-  const filePath = `./application/resources/${name}`;
+  const filePath = `./uploads/${name}`;
   // Get incoming stream by streamId sent from client
   const readable = context.client.getStream(streamId);
   // Create nodejs stream to write file on server

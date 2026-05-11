@@ -50,6 +50,7 @@
     <v-tabs v-model="panelActiveTab" bg-color="transparent" density="compact" class="task-detail-tabs mb-2">
       <v-tab value="main">Основное</v-tab>
       <v-tab value="assignees">Исполнители</v-tab>
+      <v-tab value="files">Файлы</v-tab>
     </v-tabs>
     <div class="task-detail-window mb-2">
       <div v-show="panelActiveTab === 'main'">
@@ -80,6 +81,48 @@
           </template>
         </ComplexBlock>
       </div>
+      <div v-show="panelActiveTab === 'files'">
+        <ComplexBlock
+          v-model="docIds"
+          remote-search
+          collection="doc"
+          :error="!!panelFieldErrors.files"
+          :error-messages="panelFieldErrors.files ? [panelFieldErrors.files] : []"
+          parent-collection="task"
+          :parent-id="taskId"
+          link-field="docLinks"
+          :context-key="taskId"
+          separate-create-button
+          inline-separate-create
+          hide-search-input
+          create-field="title"
+          @link-remove-error="panelFieldErrors.files = $event"
+          @link-removed="panelFieldErrors.files = ''"
+          @link-add-error="panelFieldErrors.files = $event"
+          @link-added="panelFieldErrors.files = ''"
+        >
+          <template #label="{ _id, record = {} }">
+            <div class="d-flex flex-column ga-2 align-self-stretch w-100">
+            <Input
+              v-model="record.title"
+              collection="doc"
+              :_id="_id"
+              field="title"
+              label="Название"
+              :context-key="_id"
+            />
+            <InputFile
+              v-model="record.fileName"
+              collection="doc"
+              :_id="_id"
+              field="fileName"
+              label="Файл"
+              :context-key="_id"
+            />
+            </div>
+          </template>
+        </ComplexBlock>
+      </div>
     </div>
   </div>
 </template>
@@ -87,12 +130,15 @@
 <script setup>
 import { computed, onUnmounted, watch } from 'vue';
 import ComplexBlock from './ComplexBlock.vue';
+import Input from './Input.vue';
+import InputFile from './InputFile.vue';
 import InputInline from './InputInline.vue';
 import { resolveTaskTypeMainComponent } from './tasks/registry.js';
 import { clearPanelFieldErrors, panelActiveTab, panelFieldErrors } from '../state/detailPanelState.js';
 
 const description = defineModel('description', { type: String, default: '' });
 const assigneeUserIds = defineModel('assigneeUserIds', { type: Array, default: () => [] });
+const docIds = defineModel('docIds', { type: Array, default: () => [] });
 
 const props = defineProps({
   task: { type: Object, required: true },

@@ -8,7 +8,7 @@
     taskType: '',
     status: '',
     userLinks: { collection: 'user' },
-    docLinks: { collection: 'doc' },
+    docLinks: { collection: 'doc', fields: ['fileName', 'title'] },
   },
 
   async move(id, direction) {

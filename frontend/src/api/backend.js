@@ -11,7 +11,7 @@ const initBackend = async () => {
   if (state) return state;
 
   const metacom = Metacom.create(getApiUrl());
-  await metacom.load("auth", "core");
+  await metacom.load("auth", "core", "files");
 
   state = { metacom, api: metacom.api };
   return state;

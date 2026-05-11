@@ -5,6 +5,7 @@ export const panelFieldErrors = reactive({
   title: '',
   description: '',
   assignees: '',
+  files: '',
 });
 
 export const panelActiveTab = ref('main');
@@ -13,4 +14,5 @@ export function clearPanelFieldErrors() {
   panelFieldErrors.title = '';
   panelFieldErrors.description = '';
   panelFieldErrors.assignees = '';
+  panelFieldErrors.files = '';
 }

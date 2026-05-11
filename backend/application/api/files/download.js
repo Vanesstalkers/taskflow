@@ -1,5 +1,5 @@
 async ({ name, type }) => {
-  const filePath = `./application/resources/${name}`;
+  const filePath = `./uploads/${name}`;
   // Create nodejs readable stream to read a file
   const readable = node.fs.createReadStream(filePath);
   // Get file size

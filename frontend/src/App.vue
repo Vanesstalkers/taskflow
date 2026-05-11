@@ -148,6 +148,7 @@
         :moving-task-id="movingTaskId"
         v-model:description="editDescription"
         v-model:assignee-user-ids="editAssigneeUserIds"
+        v-model:doc-ids="editDocIds"
         @close="closeTaskDetail"
         @move="(step) => moveTask(selectedTask._id, step)"
       />
@@ -183,6 +184,7 @@ const detailDrawer = ref(false);
 const selectedTaskId = ref('');
 const editDescription = ref('');
 const editAssigneeUserIds = ref([]);
+const editDocIds = ref([]);
 const movingTaskId = ref('');
 const authDialog = ref(false);
 const authLoading = ref(false);
@@ -277,6 +279,7 @@ const openTaskDetail = async (task) => {
   if (!id || id === 'undefined') return;
   selectedTaskId.value = id;
   editDescription.value = task.description || '';
+  editDocIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
   const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
   editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
   detailDrawer.value = true;
@@ -308,18 +311,14 @@ const loadTask = async (_id) => {
     }
     const patch = res?.store;
     if (!patch || typeof patch !== 'object') return;
-    if (patch.task && typeof patch.task === 'object') {
-      Object.assign(globalStore.store.task, patch.task);
-    }
-    if (patch.user && typeof patch.user === 'object') {
-      Object.assign(globalStore.store.user, patch.user);
-    }
-    if (patch.pp && typeof patch.pp === 'object') {
-      Object.assign(globalStore.store.pp, patch.pp);
-    }
+    globalStore.setData({
+      currentUserId: globalStore.currentUserId,
+      store: patch,
+    });
     const task = globalStore.store.task[id];
     if (!task) return;
     editDescription.value = task.description || '';
+    editDocIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
     const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
     editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
   } catch (error) {
@@ -539,6 +538,18 @@ watch(dialog, async (opened) => {
     assigneeUserIds.value = [currentUserId.value];
   }
 });
+
+watch(
+  () => selectedTask.value?.docLinks,
+  (docLinks) => {
+    if (!detailDrawer.value || !selectedTaskId.value) return;
+    const next = Object.keys(docLinks || {}).filter(Boolean);
+    const prev = editDocIds.value;
+    if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) return;
+    editDocIds.value = next;
+  },
+  { deep: true },
+);
 </script>
 
 <style scoped>

@@ -190,6 +190,7 @@ const ADD_CREATE_NEW_VALUE = '__multiEntityPicker_createNew__';
 
 const removingKey = ref(null);
 const addingKey = ref(null);
+const pendingCreateFromStore = ref(false);
 const removeError = ref('');
 const addPickerValue = ref(null);
 /** Поле добавления разворачивается после нажатия «+» */
@@ -361,6 +362,20 @@ watch(
   { deep: true },
 );
 
+watch(
+  selectedKeys,
+  (next, prev) => {
+    if (!pendingCreateFromStore.value) return;
+    const prevSet = new Set((prev || []).map((k) => String(k)));
+    const createdId = (next || []).map((k) => String(k)).find((k) => k && !prevSet.has(k));
+    if (!createdId) return;
+    pendingCreateFromStore.value = false;
+    emit('linkAdded', { targetId: createdId, created: true });
+    emit('createNew', { _id: createdId });
+  },
+  { deep: true },
+);
+
 onMounted(() => {
   if (props.inlineSeparateCreate && props.separateCreateButton) {
     addExpanded.value = true;
@@ -382,6 +397,7 @@ function isCreateNewMenuItem(item) {
 watch(
   () => props.contextKey,
   () => {
+    pendingCreateFromStore.value = false;
     removeError.value = '';
     addPickerValue.value = null;
     addExpanded.value = !!(props.inlineSeparateCreate && props.separateCreateButton);
@@ -458,7 +474,8 @@ async function runCreateNewFromSearch() {
   removeError.value = '';
   addingKey.value = ADD_CREATE_NEW_VALUE;
   try {
-    const created = await callAddObject({
+    pendingCreateFromStore.value = true;
+    await callAddObject({
       collection: props.collection,
       document,
       link: {
@@ -468,15 +485,8 @@ async function runCreateNewFromSearch() {
         linkPayload: {},
       },
     });
-    const createdId = String(created?._id || '').trim();
-    if (createdId && !selectedKeys.value.some((k) => String(k) === createdId)) {
-      selectedKeys.value = [...selectedKeys.value, createdId];
-    }
-    if (createdId) {
-      emit('linkAdded', { targetId: createdId, created: true });
-      emit('createNew', { _id: createdId });
-    }
   } catch (error) {
+    pendingCreateFromStore.value = false;
     emit('linkAddError', error.message || 'Не удалось создать и добавить связь');
   } finally {
     addingKey.value = null;
