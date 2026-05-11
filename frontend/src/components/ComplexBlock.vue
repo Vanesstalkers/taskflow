@@ -5,8 +5,16 @@
         {{ emptyText }}
       </span>
 
-      <div v-for="key in selectedKeys" :key="String(key)" class="multi-entity-picker__label text-body-2">
-        <span class="multi-entity-picker__label-text">
+      <div
+        v-for="key in selectedKeys"
+        :key="String(key)"
+        class="multi-entity-picker__label text-body-2"
+        :class="{ 'multi-entity-picker__label--full-width': fullWidthLabels }"
+      >
+        <span
+          class="multi-entity-picker__label-text"
+          :class="{ 'multi-entity-picker__label-text--full-width': fullWidthLabels }"
+        >
           <slot name="label" :_id="String(key)" :record="getStoreRecord(key)">
             {{ key }}
           </slot>
@@ -45,7 +53,9 @@
         class="multi-entity-picker__add-slot"
         :class="{
           'multi-entity-picker__add-slot--with-create-btn': showSeparateCreateButton,
-          'multi-entity-picker__add-slot--create-only': hideSearchInput && showSeparateCreateButton,
+          'multi-entity-picker__add-slot--create-only':
+            hideSearchInput && (showSeparateCreateButton || showAddViaFileInput),
+          'multi-entity-picker__add-slot--file-add': showAddViaFileInput,
         }"
         @focusout="onAddSlotFocusOut"
       >
@@ -92,6 +102,16 @@
         >
           {{ createButtonLabel }}
         </v-btn>
+        <InputFile
+          v-if="showAddViaFileInput"
+          :collection="entityStoreCollection"
+          :field="addFileField"
+          :label="addFileLabel"
+          :multiple="addFileMultiple"
+          :create-linked-document="createLinkedDocument"
+          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :context-key="`${String(contextKey || parentId || '')}:add-file`"
+        />
       </div>
     </div>
 
@@ -130,6 +150,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { getApi } from '../api/backend.js';
 import { addObject as callAddObject, updateLink as callUpdateLink } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
+import InputFile from './InputFile.vue';
 
 const globalStore = useStore();
 
@@ -174,6 +195,17 @@ const props = defineProps({
   inlineSeparateCreate: { type: Boolean, default: false },
   /** Скрыть поле поиска / ввод; остаётся кнопка «Создать» (обычно с `separateCreateButton` + `inlineSeparateCreate`). */
   hideSearchInput: { type: Boolean, default: false },
+  /** Каждая метка связи на всю ширину (для слота label с полями ввода) */
+  fullWidthLabels: { type: Boolean, default: false },
+  /**
+   * Режим link: в полоске добавления показать загрузку файлов вместо кнопки «Создать» —
+   * для каждого файла создаётся документ `collection` и связь (как `createLinkedDocument` + InputFile).
+   */
+  addViaFileUpload: { type: Boolean, default: false },
+  /** Имя поля в новом документе, куда пишется имя загруженного файла */
+  addFileField: { type: String, default: 'fileName' },
+  addFileLabel: { type: String, default: 'Добавить файлы' },
+  addFileMultiple: { type: Boolean, default: true },
 });
 
 const emit = defineEmits([
@@ -191,6 +223,7 @@ const ADD_CREATE_NEW_VALUE = '__multiEntityPicker_createNew__';
 const removingKey = ref(null);
 const addingKey = ref(null);
 const pendingCreateFromStore = ref(false);
+let pendingCreateResolve = null;
 const removeError = ref('');
 const addPickerValue = ref(null);
 /** Поле добавления разворачивается после нажатия «+» */
@@ -213,6 +246,10 @@ const linkPersistEnabled = computed(() =>
 );
 
 const showSeparateCreateButton = computed(() => props.showCreateNewOption && props.separateCreateButton);
+const showAddViaFileInput = computed(() => props.addViaFileUpload && linkPersistEnabled.value);
+const inlineAddPersist = computed(
+  () => props.inlineSeparateCreate && (props.separateCreateButton || props.addViaFileUpload),
+);
 
 const hideSearchInput = computed(() => props.hideSearchInput === true || props.hideSearchInput === 'true');
 
@@ -225,7 +262,7 @@ const effectiveRemoteSearch = computed(() => props.remoteSearch && !hideSearchIn
 /** Полоска добавления (поле + опционально кнопка «Создать») видна сразу или после «+». */
 const showAddSlot = computed(() => {
   if (!linkPersistEnabled.value) return false;
-  if (props.inlineSeparateCreate && props.separateCreateButton) return true;
+  if (inlineAddPersist.value) return true;
   return addExpanded.value;
 });
 
@@ -370,6 +407,10 @@ watch(
     const createdId = (next || []).map((k) => String(k)).find((k) => k && !prevSet.has(k));
     if (!createdId) return;
     pendingCreateFromStore.value = false;
+    if (pendingCreateResolve) {
+      pendingCreateResolve.resolve(createdId);
+      pendingCreateResolve = null;
+    }
     emit('linkAdded', { targetId: createdId, created: true });
     emit('createNew', { _id: createdId });
   },
@@ -377,7 +418,7 @@ watch(
 );
 
 onMounted(() => {
-  if (props.inlineSeparateCreate && props.separateCreateButton) {
+  if (inlineAddPersist.value) {
     addExpanded.value = true;
   }
   if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
@@ -398,9 +439,13 @@ watch(
   () => props.contextKey,
   () => {
     pendingCreateFromStore.value = false;
+    if (pendingCreateResolve) {
+      pendingCreateResolve.reject(new Error('Сброс контекста'));
+      pendingCreateResolve = null;
+    }
     removeError.value = '';
     addPickerValue.value = null;
-    addExpanded.value = !!(props.inlineSeparateCreate && props.separateCreateButton);
+    addExpanded.value = inlineAddPersist.value;
     addMenuOpen.value = false;
     if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
   },
@@ -428,7 +473,7 @@ function openAddField() {
 }
 
 function onAddSlotFocusOut(event) {
-  if (props.inlineSeparateCreate && props.separateCreateButton) return;
+  if (inlineAddPersist.value) return;
   const related = event.relatedTarget;
   if (related && typeof related === 'object' && event.currentTarget.contains(related)) return;
   window.setTimeout(() => {
@@ -452,11 +497,52 @@ function getStoreRecord(key) {
   return bucket[k];
 }
 
+async function createLinkedDocument(document = {}) {
+  if (!linkPersistEnabled.value) {
+    emit('createNew');
+    throw new Error('Не настроено сохранение связей');
+  }
+
+  const payload = document && typeof document === 'object' && !Array.isArray(document) ? { ...document } : {};
+  removeError.value = '';
+  addingKey.value = ADD_CREATE_NEW_VALUE;
+
+  const createdIdPromise = new Promise((resolve, reject) => {
+    pendingCreateResolve = { resolve, reject };
+  });
+
+  try {
+    pendingCreateFromStore.value = true;
+    await callAddObject({
+      collection: props.collection,
+      document: payload,
+      link: {
+        collection: linkParentCollection.value,
+        _id: linkParentId.value,
+        linkField: props.linkField,
+        linkPayload: {},
+      },
+    });
+    const createdId = await createdIdPromise;
+    return createdId;
+  } catch (error) {
+    pendingCreateFromStore.value = false;
+    if (pendingCreateResolve) {
+      pendingCreateResolve.reject(error);
+      pendingCreateResolve = null;
+    }
+    emit('linkAddError', error.message || 'Не удалось создать и добавить связь');
+    throw error;
+  } finally {
+    addingKey.value = null;
+  }
+}
+
 async function runCreateNewFromSearch() {
   if (!props.showCreateNewOption) return;
   if (!linkPersistEnabled.value) {
     emit('createNew');
-    if (!(props.inlineSeparateCreate && props.separateCreateButton)) {
+    if (!inlineAddPersist.value) {
       addExpanded.value = false;
     }
     addMenuOpen.value = false;
@@ -471,28 +557,14 @@ async function runCreateNewFromSearch() {
     document[createField] = createValue;
   }
 
-  removeError.value = '';
-  addingKey.value = ADD_CREATE_NEW_VALUE;
   try {
-    pendingCreateFromStore.value = true;
-    await callAddObject({
-      collection: props.collection,
-      document,
-      link: {
-        collection: linkParentCollection.value,
-        _id: linkParentId.value,
-        linkField: props.linkField,
-        linkPayload: {},
-      },
-    });
-  } catch (error) {
-    pendingCreateFromStore.value = false;
-    emit('linkAddError', error.message || 'Не удалось создать и добавить связь');
+    await createLinkedDocument(document);
+  } catch {
+    // ошибка уже передана в linkAddError
   } finally {
-    addingKey.value = null;
     addMenuOpen.value = false;
     search.value = '';
-    if (!(props.inlineSeparateCreate && props.separateCreateButton)) {
+    if (!inlineAddPersist.value) {
       addExpanded.value = false;
     }
   }
@@ -539,7 +611,7 @@ async function onAddSelected(val) {
     addPickerValue.value = null;
     addMenuOpen.value = false;
     search.value = '';
-    if (!(props.inlineSeparateCreate && props.separateCreateButton)) {
+    if (!inlineAddPersist.value) {
       addExpanded.value = false;
     }
   }
@@ -576,21 +648,44 @@ async function removeTarget(key) {
 </script>
 
 <style scoped>
+.multi-entity-picker {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 .multi-entity-picker__label {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   padding: 4px 4px 4px 12px;
   border-radius: 6px;
-  background-color: rgba(var(--v-theme-on-surface), 0.08);
   color: rgb(var(--v-theme-on-surface));
   max-width: 100%;
   word-break: break-word;
   user-select: none;
 }
 
+.multi-entity-picker__label--full-width {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .multi-entity-picker__label-text {
   min-width: 0;
+}
+
+.multi-entity-picker__label-text--full-width {
+  flex: 1 1 auto;
+  width: 100%;
+  align-self: stretch;
+}
+
+.multi-entity-picker__label-text--full-width :deep(.app-input-wrap),
+.multi-entity-picker__label-text--full-width :deep(.app-input-file-wrap) {
+  width: 100%;
 }
 
 .multi-entity-picker__add-trigger {
@@ -638,6 +733,24 @@ async function removeTarget(key) {
   min-width: 0;
   max-width: none;
   width: auto;
+}
+
+.multi-entity-picker__add-slot--file-add {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  align-self: stretch;
+}
+
+.multi-entity-picker__add-slot--create-only.multi-entity-picker__add-slot--file-add {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.multi-entity-picker__add-slot--file-add :deep(.app-input-file-wrap),
+.multi-entity-picker__add-slot--file-add :deep(.app-input-wrap) {
+  width: 100%;
 }
 
 .multi-entity-picker__add-slot--with-create-btn .multi-entity-picker__add {

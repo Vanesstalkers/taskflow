@@ -10,10 +10,11 @@
       v-model="text"
       v-bind="$attrs"
       :label="label"
-      variant="outlined"
+      variant="underlined"
+      hide-details="auto"
       :disabled="disabled || saving"
       :hint="saveError ? '' : hint"
-      :persistent-hint="!saveError"
+      :persistent-hint="!saveError && !!String(hint || '').trim()"
       :error="!!saveError"
       :error-messages="saveError ? [saveError] : []"
       @keydown="onKeydown"
@@ -41,10 +42,7 @@ const props = defineProps({
   field: { type: String, required: true },
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
-  hint: {
-    type: String,
-    default: 'Ctrl+Enter — сохранить (⌘+Enter на Mac), также при уходе фокуса',
-  },
+  hint: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
 });

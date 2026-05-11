@@ -4,55 +4,27 @@
     :class="{
       'app-input-file-wrap--success': showSuccessOutline,
       'app-input-file-wrap--error': showErrorOutline,
-      'app-input-file-wrap--dragover': isDragOver,
     }"
-    @dragenter.prevent="onDragEnter"
-    @dragover.prevent="onDragOver"
-    @dragleave.prevent="onDragLeave"
-    @drop.prevent="onDropFile"
   >
-    <input
-      ref="fileInputRef"
-      type="file"
-      class="d-none"
-      :accept="accept"
-      :disabled="disabled || saving"
-      @change="onNativeFileChange"
-    />
-    <v-text-field
+    <v-file-input
       v-bind="$attrs"
-      :model-value="displayValue"
-      readonly
-      variant="outlined"
+      :model-value="displayedFileModel"
+      variant="underlined"
       :label="label"
-      :hint="saveError ? '' : hint"
-      :persistent-hint="!saveError"
+      :multiple="multiple"
+      :accept="accept"
+      hide-details="auto"
+      :hint="saveError ? '' : uiHint"
+      :persistent-hint="!saveError && !!uiHint"
       :error="!!saveError"
       :error-messages="saveError ? [saveError] : []"
       :disabled="disabled || saving"
       :loading="saving"
+      clearable
+      prepend-icon="mdi-upload"
+      @update:model-value="onFileInputUpdate"
     >
-      <template #prepend-inner>
-        <v-btn
-          type="button"
-          icon="mdi-upload"
-          variant="text"
-          density="comfortable"
-          :disabled="disabled || saving"
-          :aria-label="uploadAriaLabel"
-          @click="openFilePicker"
-        />
-      </template>
       <template v-if="hasStoredFile" #append-inner>
-        <v-btn
-          type="button"
-          icon="mdi-close"
-          variant="text"
-          density="comfortable"
-          :disabled="disabled || saving || downloading"
-          aria-label="Очистить файл"
-          @click="clearStoredFile"
-        />
         <v-btn
           type="button"
           icon="mdi-download"
@@ -61,10 +33,12 @@
           :disabled="disabled || saving || downloading"
           :loading="downloading"
           :aria-label="downloadAriaLabel"
-          @click="downloadStoredFile"
+          @click.stop.prevent="downloadStoredFile"
+          @mousedown.stop
+          @pointerdown.stop
         />
       </template>
-    </v-text-field>
+    </v-file-input>
   </div>
 </template>
 
@@ -80,33 +54,32 @@ const OUTLINE_FLASH_MS = 2000;
 const fileName = defineModel({ type: String, default: '' });
 
 const props = defineProps({
-  /** Идентификатор документа */
-  _id: { type: String, required: true },
+  /** Идентификатор документа; при создании через связь можно не передавать */
+  _id: { type: String, default: '' },
+  /** Создание записи и связи перед первой загрузкой (слот `add` у ComplexBlock) */
+  createLinkedDocument: { type: Function, default: null },
   /** Коллекция MongoDB (как в core/updateField) */
   collection: { type: String, required: true },
   /** Имя поля — в БД хранится имя файла на сервере (`application/resources/<name>`) */
   field: { type: String, required: true },
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
-  hint: {
-    type: String,
-    default: 'Загрузите файл — на сервер сохраняется поток, в поле записывается имя файла',
-  },
-  /** Атрибут accept у скрытого input[type=file] */
+  hint: { type: String, default: '' },
+  /** Атрибут accept у v-file-input */
   accept: { type: String, default: '' },
   /** MIME для `Blob` при скачивании (как в `console.js` / api.files.download) */
   downloadMimeType: { type: String, default: 'application/octet-stream' },
-  uploadAriaLabel: { type: String, default: 'Загрузить файл' },
   downloadAriaLabel: { type: String, default: 'Скачать файл' },
   emptyPlaceholder: { type: String, default: 'Файл не выбран' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение */
   contextKey: { type: String, default: '' },
+  /** Несколько файлов за раз (для новых записей через `createLinkedDocument` — по файлу создаётся документ и загрузка) */
+  multiple: { type: Boolean, default: false },
 });
 
-const fileInputRef = ref(null);
+const pickedFile = ref(null);
 const saving = ref(false);
 const downloading = ref(false);
-const isDragOver = ref(false);
 const saveError = ref('');
 const lastCommitted = ref('');
 
@@ -116,10 +89,17 @@ let successOutlineTimer = null;
 let errorOutlineTimer = null;
 
 const hasStoredFile = computed(() => String(fileName.value || '').trim() !== '');
+const storedFileName = computed(() => String(fileName.value || '').trim());
+const displayedFileModel = computed(() => {
+  if (pickedFile.value) return pickedFile.value;
+  if (!storedFileName.value) return null;
+  // Псевдо-файл только для отображения имени в v-file-input.
+  return { name: storedFileName.value };
+});
 
-const displayValue = computed(() =>
-  hasStoredFile.value ? String(fileName.value).trim() : props.emptyPlaceholder,
-);
+const uiHint = computed(() => {
+  return props.hint || '';
+});
 
 function clearOutlineFlash() {
   clearTimeout(successOutlineTimer);
@@ -157,6 +137,7 @@ function flashError() {
 watch(
   () => props.contextKey,
   () => {
+    pickedFile.value = null;
     lastCommitted.value = String(fileName.value).trim();
     saveError.value = '';
     clearOutlineFlash();
@@ -168,64 +149,33 @@ onUnmounted(() => {
   clearOutlineFlash();
 });
 
-function openFilePicker() {
-  if (props.disabled || saving.value) return;
-  fileInputRef.value?.click();
-}
-
-function canHandleDrop() {
-  return !props.disabled && !saving.value;
-}
-
-function onDragEnter(event) {
-  if (!canHandleDrop()) return;
-  const hasFiles = event.dataTransfer?.types?.includes?.('Files');
-  if (hasFiles) isDragOver.value = true;
-}
-
-function onDragOver(event) {
-  if (!canHandleDrop()) return;
-  const hasFiles = event.dataTransfer?.types?.includes?.('Files');
-  if (!hasFiles) return;
-  isDragOver.value = true;
-  event.dataTransfer.dropEffect = 'copy';
-}
-
-function onDragLeave(event) {
-  const currentTarget = event.currentTarget;
-  const relatedTarget = event.relatedTarget;
-  if (currentTarget?.contains?.(relatedTarget)) return;
-  isDragOver.value = false;
-}
-
-async function uploadAndPersistFile(file) {
-  if (!file || props.disabled) return;
-  if (!props._id) {
-    saveError.value = 'Не указан идентификатор записи';
-    flashError();
-    return;
+async function resolveRecordId(file) {
+  const recordId = String(props._id || '').trim();
+  if (recordId) return recordId;
+  if (typeof props.createLinkedDocument !== 'function') {
+    throw new Error('Не указан идентификатор записи');
   }
-
-  saving.value = true;
-  saveError.value = '';
-  try {
-    await uploadBlobToServer(file);
-    const next = String(file.name || '').trim();
-    await saveField({
-      collection: props.collection,
-      _id: props._id,
-      field: props.field,
-      value: next,
-    });
-    fileName.value = next;
-    lastCommitted.value = next;
-    flashSuccess();
-  } catch (error) {
-    saveError.value = error.message || 'Не удалось загрузить или сохранить';
-    flashError();
-  } finally {
-    saving.value = false;
+  const title = String(file?.name || '').trim();
+  const createdId = await props.createLinkedDocument({ title, fileName: '' });
+  const nextId = String(createdId || '').trim();
+  if (!nextId) {
+    throw new Error('Не удалось создать запись для файла');
   }
+  return nextId;
+}
+
+async function uploadOneFile(file) {
+  const recordId = await resolveRecordId(file);
+  await uploadBlobToServer(file);
+  const next = String(file.name || '').trim();
+  await saveField({
+    collection: props.collection,
+    _id: recordId,
+    field: props.field,
+    value: next,
+  });
+  fileName.value = next;
+  lastCommitted.value = next;
 }
 
 async function streamAfterDownload(streamId) {
@@ -277,25 +227,45 @@ function triggerBrowserDownload(blob, name) {
   a.remove();
 }
 
-async function onNativeFileChange(event) {
-  const input = event.target;
-  const file = input?.files?.[0];
-  if (input) input.value = '';
-  await uploadAndPersistFile(file);
-}
+async function onFileInputUpdate(value) {
+  const raw = value == null ? [] : Array.isArray(value) ? value : [value];
+  const files = raw.filter((f) => f instanceof File);
+  if (files.length === 0) {
+    if (hasStoredFile.value) await clearStoredFile();
+    return;
+  }
 
-async function onDropFile(event) {
-  isDragOver.value = false;
-  if (!canHandleDrop()) return;
-  const file = event.dataTransfer?.files?.[0];
-  await uploadAndPersistFile(file);
+  const recordId = String(props._id || '').trim();
+  const canBatch =
+    props.multiple && !recordId && typeof props.createLinkedDocument === 'function';
+  const queue = canBatch ? files : [files[0]];
+
+  saving.value = true;
+  saveError.value = '';
+  pickedFile.value = null;
+  try {
+    for (const file of queue) {
+      await uploadOneFile(file);
+    }
+    flashSuccess();
+    if (canBatch) {
+      fileName.value = '';
+      lastCommitted.value = '';
+    }
+  } catch (error) {
+    saveError.value = error.message || 'Не удалось загрузить или сохранить';
+    flashError();
+  } finally {
+    pickedFile.value = null;
+    saving.value = false;
+  }
 }
 
 async function clearStoredFile() {
   if (!hasStoredFile.value || props.disabled || saving.value || downloading.value) return;
-  if (!props._id) {
-    saveError.value = 'Не указан идентификатор записи';
-    flashError();
+  const recordId = String(props._id || '').trim();
+  if (!recordId) {
+    pickedFile.value = null;
     return;
   }
 
@@ -304,10 +274,11 @@ async function clearStoredFile() {
   try {
     await saveField({
       collection: props.collection,
-      _id: props._id,
+      _id: recordId,
       field: props.field,
       value: '',
     });
+    pickedFile.value = null;
     fileName.value = '';
     lastCommitted.value = '';
     flashSuccess();
@@ -348,10 +319,5 @@ async function downloadStoredFile() {
   color: rgb(var(--v-theme-error)) !important;
   --v-field-border-opacity: 1 !important;
   transition: color 0.15s ease;
-}
-
-.app-input-file-wrap--dragover :deep(.v-field--variant-outlined .v-field__outline) {
-  color: rgb(var(--v-theme-primary)) !important;
-  --v-field-border-opacity: 1 !important;
 }
 </style>

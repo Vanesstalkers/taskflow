@@ -55,7 +55,7 @@ const props = defineProps({
   /** Подпись, если modelValue пустой */
   emptyLabel: { type: String, default: '—' },
   disabled: { type: Boolean, default: false },
-  hint: { type: String, default: 'Нажми, чтобы изменить' },
+  hint: { type: String, default: '' },
   displayTag: { type: String, default: 'span' },
   displayClass: { type: String, default: '' },
   inputClass: { type: String, default: '' },

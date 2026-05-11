@@ -25,33 +25,29 @@
       separate-create-button
       inline-separate-create
       hide-search-input
+      full-width-labels
     >
       <template #label="{ _id, record = {} }">
-        <Input
-          v-model="record.login"
-          collection="user"
-          :_id="_id"
-          field="login"
-          label="Логин"
-          :context-key="_id"
-        />
-        <Input
-          v-model="record.password"
-          collection="user"
-          :_id="_id"
-          field="password"
-          label="Пароль"
-          type="password"
-          :context-key="_id"
-        />
-        <InputFile
-          v-model="record.avatar"
-          collection="user"
-          :_id="_id"
-          field="avatar"
-          label="Аватар"
-          :context-key="_id"
-        />
+        <div class="d-flex flex-column ga-2 align-self-stretch w-100">
+          <Input v-model="record.login" collection="user" :_id="_id" field="login" label="Логин" :context-key="_id" />
+          <Input
+            v-model="record.password"
+            collection="user"
+            :_id="_id"
+            field="password"
+            label="Пароль"
+            type="password"
+            :context-key="_id"
+          />
+          <InputFile
+            v-model="record.avatar"
+            collection="user"
+            :_id="_id"
+            field="avatar"
+            label="Аватар"
+            :context-key="_id"
+          />
+        </div>
       </template>
     </ComplexBlock>
   </div>

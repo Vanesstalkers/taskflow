@@ -13,8 +13,9 @@
       variant="outlined"
       :rows="rows"
       :disabled="disabled || saving"
+      hide-details="auto"
       :hint="saveError ? '' : hint"
-      :persistent-hint="!saveError"
+      :persistent-hint="!saveError && !!String(hint || '').trim()"
       :error="!!saveError"
       :error-messages="saveError ? [saveError] : []"
       @keydown="onKeydown"
@@ -43,10 +44,7 @@ const props = defineProps({
   label: { type: String, default: '' },
   rows: { type: [Number, String], default: 4 },
   disabled: { type: Boolean, default: false },
-  hint: {
-    type: String,
-    default: 'Ctrl+Enter — сохранить (⌘+Enter на Mac), также при уходе фокуса',
-  },
+  hint: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
 });

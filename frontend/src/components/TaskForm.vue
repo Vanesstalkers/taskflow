@@ -92,10 +92,11 @@
           :parent-id="taskId"
           link-field="docLinks"
           :context-key="taskId"
-          separate-create-button
           inline-separate-create
           hide-search-input
-          create-field="title"
+          add-via-file-upload
+          :show-create-new-option="false"
+          full-width-labels
           @link-remove-error="panelFieldErrors.files = $event"
           @link-removed="panelFieldErrors.files = ''"
           @link-add-error="panelFieldErrors.files = $event"
@@ -103,22 +104,22 @@
         >
           <template #label="{ _id, record = {} }">
             <div class="d-flex flex-column ga-2 align-self-stretch w-100">
-            <Input
-              v-model="record.title"
-              collection="doc"
-              :_id="_id"
-              field="title"
-              label="Название"
-              :context-key="_id"
-            />
-            <InputFile
-              v-model="record.fileName"
-              collection="doc"
-              :_id="_id"
-              field="fileName"
-              label="Файл"
-              :context-key="_id"
-            />
+              <Input
+                v-model="record.title"
+                collection="doc"
+                :_id="_id"
+                field="title"
+                label="Название"
+                :context-key="_id"
+              />
+              <InputFile
+                v-model="record.fileName"
+                collection="doc"
+                :_id="_id"
+                field="fileName"
+                label="Файл"
+                :context-key="_id"
+              />
             </div>
           </template>
         </ComplexBlock>
