@@ -30,7 +30,7 @@
           class="multi-entity-picker__remove"
           :disabled="disabled || removingKey !== null || addingKey !== null || isRemoveBlocked"
           :loading="removingKey === String(key)"
-          @click.stop="removeTarget(key)"
+          @click.stop="requestRemove(key, $event)"
         />
       </div>
 
@@ -42,7 +42,7 @@
         density="compact"
         size="small"
         class="multi-entity-picker__add-trigger"
-        :disabled="disabled || addingKey !== null || removingKey !== null"
+        :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
         :loading="mergedLoading || addingKey !== null"
         aria-label="Добавить"
         @click="openAddField"
@@ -80,7 +80,7 @@
           no-filter
           clearable
           hide-details="auto"
-          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
           @update:model-value="onAddSelected"
         >
           <template #item="{ props: listItemProps, item }">
@@ -91,7 +91,7 @@
           </template>
         </v-autocomplete>
         <v-btn
-          v-if="showSeparateCreateButton"
+          v-if="showSeparateCreateButton && !isAddBlocked"
           type="button"
           variant="tonal"
           size="small"
@@ -109,7 +109,7 @@
           :label="addFileLabel"
           :multiple="addFileMultiple"
           :create-linked-document="createLinkedDocument"
-          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
           :context-key="`${String(contextKey || parentId || '')}:add-file`"
         />
       </div>
@@ -123,7 +123,8 @@
 
     <v-autocomplete
       v-if="!linkPersistEnabled"
-      v-model="selectedKeys"
+      :model-value="selectedKeys"
+      @update:model-value="onNonLinkSelectionUpdate"
       v-model:search="search"
       variant="outlined"
       density="comfortable"
@@ -143,6 +144,44 @@
       <template #selection />
     </v-autocomplete>
   </div>
+
+  <teleport to="body">
+    <div
+      v-if="removeConfirmOpen"
+      ref="removeConfirmEl"
+      class="multi-entity-picker__remove-confirm-tooltip"
+      :style="{ left: `${removeConfirmX}px`, top: `${removeConfirmY}px` }"
+      role="tooltip"
+      aria-live="polite"
+      @click.stop
+    >
+      <div v-if="resolvedRemoveConfirmText" class="multi-entity-picker__remove-confirm-text text-body-2">
+        {{ resolvedRemoveConfirmText }}
+      </div>
+      <div class="multi-entity-picker__remove-confirm-actions">
+        <v-btn
+          type="button"
+          variant="tonal"
+          color="error"
+          density="comfortable"
+          size="small"
+          :disabled="disabled || removingKey !== null || addingKey !== null"
+          @click="confirmRemove"
+        >
+          Удалить
+        </v-btn>
+        <v-btn
+          type="button"
+          variant="text"
+          density="comfortable"
+          size="small"
+          @click="cancelRemove"
+        >
+          Отмена
+        </v-btn>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
@@ -177,13 +216,19 @@ const props = defineProps({
   parentId: { type: String, default: '' },
   linkField: { type: String, default: '' },
   minSelection: { type: Number, default: 0 },
+  /** Не больше стольки выбранных объектов (0 — без ограничения). Режим link и обычный multiple. */
+  maxSelection: { type: Number, default: 0 },
+  /** Текст при попытке превысить лимит (пустой — сообщение по умолчанию) */
+  maxSelectionMessage: { type: String, default: '' },
+  /** Текст в tooltip-подтверждении удаления (пустой — сообщение по умолчанию) */
+  removeConfirmText: { type: String, default: '' },
   contextKey: { type: String, default: '' },
   /** Первый пункт «Создать» в списке добавления (режим link) */
   showCreateNewOption: { type: Boolean, default: true },
   /** Кнопка «Создать» рядом с полем, без пункта в выпадающем списке */
   separateCreateButton: { type: Boolean, default: false },
   /** Текст кнопки при `separateCreateButton` */
-  createButtonLabel: { type: String, default: 'Создать' },
+  createButtonLabel: { type: String, default: 'Добавить' },
   /** Поле документа, куда попадёт введённый текст поиска */
   createField: { type: String, default: 'title' },
   /** Загрузка списка через `api.core.search` по пропу `collection` */
@@ -226,6 +271,11 @@ const pendingCreateFromStore = ref(false);
 let pendingCreateResolve = null;
 const removeError = ref('');
 const addPickerValue = ref(null);
+const removeConfirmOpen = ref(false);
+const removeConfirmKey = ref(null);
+const removeConfirmX = ref(0);
+const removeConfirmY = ref(0);
+const removeConfirmEl = ref(null);
 /** Поле добавления разворачивается после нажатия «+» */
 const addExpanded = ref(false);
 const addMenuOpen = ref(false);
@@ -267,6 +317,28 @@ const showAddSlot = computed(() => {
 });
 
 const isRemoveBlocked = computed(() => props.minSelection > 0 && selectedKeys.value.length <= props.minSelection);
+
+const maxSelectionEffective = computed(() => {
+  const n = Number(props.maxSelection);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+});
+
+const resolvedMaxSelectionMessage = computed(() => {
+  const custom = String(props.maxSelectionMessage || '').trim();
+  if (custom) return custom;
+  const lim = maxSelectionEffective.value;
+  return lim != null ? `Можно добавить не более ${lim}` : '';
+});
+
+const resolvedRemoveConfirmText = computed(() => {
+  const custom = String(props.removeConfirmText || '').trim();
+  if (custom) return custom;
+  return '';
+});
+
+const isAddBlocked = computed(
+  () => maxSelectionEffective.value != null && selectedKeys.value.length >= maxSelectionEffective.value,
+);
 
 const mergedLoading = computed(() => props.loading || internalLoading.value);
 
@@ -465,12 +537,67 @@ function focusAddInput() {
 }
 
 function openAddField() {
+  if (isAddBlocked.value) return;
   addExpanded.value = true;
   addMenuOpen.value = false;
   nextTick(() => {
     nextTick(() => focusAddInput());
   });
 }
+
+function requestRemove(key, event) {
+  removeConfirmKey.value = String(key);
+  removeConfirmOpen.value = true;
+
+  const el = event?.currentTarget;
+  if (!el || typeof el.getBoundingClientRect !== 'function') return;
+  const rect = el.getBoundingClientRect();
+  // Tooltip-like блок ниже и по центру иконки.
+  // Позиционируем tooltip слева от крестика: правый край tooltip = левый край кнопки.
+  removeConfirmX.value = Math.round(rect.left) - 8;
+  // Выровнять tooltip по верхней границе кнопки удаления.
+  removeConfirmY.value = Math.max(8, Math.round(rect.top));
+}
+
+function cancelRemove() {
+  removeConfirmOpen.value = false;
+  removeConfirmKey.value = null;
+}
+
+async function confirmRemove() {
+  const key = removeConfirmKey.value;
+  cancelRemove();
+  if (!key) return;
+  await removeTarget(key);
+}
+
+function onDocMouseDown(e) {
+  if (!removeConfirmOpen.value) return;
+  const tooltipEl = removeConfirmEl.value;
+  if (!tooltipEl || typeof tooltipEl.contains !== 'function') {
+    cancelRemove();
+    return;
+  }
+  if (e?.target && tooltipEl.contains(e.target)) return;
+  cancelRemove();
+}
+
+watch(removeConfirmOpen, (open) => {
+  if (open) {
+    document.addEventListener('mousedown', onDocMouseDown, true);
+    return;
+  }
+  document.removeEventListener('mousedown', onDocMouseDown, true);
+});
+
+watch(removeConfirmOpen, (open) => {
+  if (!open) return;
+  const onKey = (e) => {
+    if (e.key === 'Escape') cancelRemove();
+  };
+  window.addEventListener('keydown', onKey);
+  return () => window.removeEventListener('keydown', onKey);
+});
 
 function onAddSlotFocusOut(event) {
   if (inlineAddPersist.value) return;
@@ -479,7 +606,12 @@ function onAddSlotFocusOut(event) {
   window.setTimeout(() => {
     if (addMenuOpen.value) return;
     const root = event.currentTarget;
-    if (root && typeof root.contains === 'function' && document.activeElement && root.contains(document.activeElement)) {
+    if (
+      root &&
+      typeof root.contains === 'function' &&
+      document.activeElement &&
+      root.contains(document.activeElement)
+    ) {
       return;
     }
     addExpanded.value = false;
@@ -501,6 +633,12 @@ async function createLinkedDocument(document = {}) {
   if (!linkPersistEnabled.value) {
     emit('createNew');
     throw new Error('Не настроено сохранение связей');
+  }
+
+  if (isAddBlocked.value) {
+    const msg = resolvedMaxSelectionMessage.value;
+    emit('linkAddError', msg);
+    throw new Error(msg);
   }
 
   const payload = document && typeof document === 'object' && !Array.isArray(document) ? { ...document } : {};
@@ -540,6 +678,10 @@ async function createLinkedDocument(document = {}) {
 
 async function runCreateNewFromSearch() {
   if (!props.showCreateNewOption) return;
+  if (isAddBlocked.value) {
+    emit('linkAddError', resolvedMaxSelectionMessage.value);
+    return;
+  }
   if (!linkPersistEnabled.value) {
     emit('createNew');
     if (!inlineAddPersist.value) {
@@ -585,6 +727,12 @@ async function onAddSelected(val) {
   if (!linkPersistEnabled.value) return;
   if (selectedKeys.value.some((k) => String(k) === id)) {
     addPickerValue.value = null;
+    return;
+  }
+
+  if (isAddBlocked.value) {
+    addPickerValue.value = null;
+    emit('linkAddError', resolvedMaxSelectionMessage.value);
     return;
   }
 
@@ -644,6 +792,17 @@ async function removeTarget(key) {
   } finally {
     removingKey.value = null;
   }
+}
+
+function onNonLinkSelectionUpdate(next) {
+  const max = maxSelectionEffective.value;
+  const arr = Array.isArray(next) ? next.map((k) => String(k)) : [];
+  if (max != null && arr.length > max) {
+    selectedKeys.value = arr.slice(0, max);
+    emit('linkAddError', resolvedMaxSelectionMessage.value);
+    return;
+  }
+  selectedKeys.value = arr;
 }
 </script>
 
@@ -827,6 +986,28 @@ async function removeTarget(key) {
 
 .multi-entity-picker__remove:hover:not(:disabled) :deep(.v-icon) {
   opacity: 1;
+}
+
+.multi-entity-picker__remove-confirm-tooltip {
+  position: fixed;
+  z-index: 3000;
+  transform: translateX(-100%);
+  max-width: min(360px, 90vw);
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
+  border-radius: 8px;
+  padding: 10px 12px 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.multi-entity-picker__remove-confirm-text {
+  margin-bottom: 10px;
+}
+.multi-entity-picker__remove-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>
 

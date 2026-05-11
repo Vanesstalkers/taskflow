@@ -1,9 +1,5 @@
 <template>
   <div>
-    <p class="text-caption text-medium-emphasis mb-2">
-      Задача на добавление пользователя: опишите требования и контекст; связи с учётными записями настраиваются на
-      вкладке «Исполнители».
-    </p>
     <Textarea
       v-model="description"
       collection="task"
@@ -16,6 +12,7 @@
 
     <ComplexBlock
       v-model="createdUserIds"
+      :max-selection="1"
       add-placeholder="Поиск по имени или логину (от 3 символов)"
       collection="user"
       parent-collection="task"
