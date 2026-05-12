@@ -233,6 +233,13 @@ const props = defineProps({
   createField: { type: String, default: 'title' },
   /** Загрузка списка через `api.core.search` по пропу `collection` */
   remoteSearch: { type: Boolean, default: false },
+  /**
+   * Выбор пункта из `items` создаёт новый документ `collection` с полем `pickDocumentField` = выбранное значение (`item-value`) и связь через `addObject`, а не `updateLink` на существующий id.
+   * Для справочников `{ id, title }`: `item-value="id"`, `item-title="title"`.
+   */
+  pickCreatesDocument: { type: Boolean, default: false },
+  /** Имя поля в новом документе при `pickCreatesDocument` (для userRole обычно `type`). */
+  pickDocumentField: { type: String, default: 'type' },
   disabled: { type: Boolean, default: false },
   /**
    * Вместе с `separateCreateButton`: показывать поле и кнопку «Создать» сразу, без кнопки «+».
@@ -725,6 +732,37 @@ async function onAddSelected(val) {
     return;
   }
   if (!linkPersistEnabled.value) return;
+
+  if (props.pickCreatesDocument) {
+    addPickerValue.value = null;
+    if (isAddBlocked.value) {
+      emit('linkAddError', resolvedMaxSelectionMessage.value);
+      return;
+    }
+    const field = String(props.pickDocumentField || 'type').trim() || 'type';
+    const bucket = getEntityBucket();
+    for (const key of selectedKeys.value) {
+      const rec = bucket[String(key)];
+      if (rec && String(rec[field] ?? '') === id) {
+        emit('linkAddError', 'Этот пункт уже выбран');
+        return;
+      }
+    }
+    removeError.value = '';
+    try {
+      await createLinkedDocument({ [field]: id });
+    } catch {
+      // ошибка уже в linkAddError
+    } finally {
+      addMenuOpen.value = false;
+      search.value = '';
+      if (!inlineAddPersist.value) {
+        addExpanded.value = false;
+      }
+    }
+    return;
+  }
+
   if (selectedKeys.value.some((k) => String(k) === id)) {
     addPickerValue.value = null;
     return;
@@ -777,12 +815,15 @@ async function removeTarget(key) {
   removeError.value = '';
   removingKey.value = targetId;
   try {
+    const collection = linkParentCollection.value;
+    const _id = linkParentId.value;
     await callUpdateLink({
-      _id: linkParentId.value,
-      collection: linkParentCollection.value,
+      _id,
+      collection,
       linkField: props.linkField,
       targetId,
       action: 'remove',
+      taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
     });
     selectedKeys.value = selectedKeys.value.filter((k) => String(k) !== targetId);
     emit('linkRemoved', { targetId });

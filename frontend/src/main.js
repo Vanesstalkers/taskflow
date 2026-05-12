@@ -12,3 +12,4 @@ app.use(pinia).use(vuetify).mount("#app");
 
 const globalStore = useStore(pinia);
 window.store = globalStore.store;
+window.lst = globalStore.lst;

@@ -1,6 +1,6 @@
 ({
   schema: () => ({
     ...domain.task.defaultSchema,
-    createdUserLinks: { collection: 'user', fields: ['login'] },
+    createdUserLinks: { collection: 'user', schema: domain.collections.user.schema() },
   }),
 });

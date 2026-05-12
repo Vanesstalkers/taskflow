@@ -1,11 +1,12 @@
 ({
   /** Поля MongoDB для текстового поиска (`api.core.search`, коллекция `user`) */
   searchFields: ['login', 'fullName'],
-  schema: {
+  schema: () => ({
     login: '',
     password: {
       hidden: true,
       onUpdate: async (password) => await metarhia.metautil.hashPassword(password),
     },
-  },
+    userRoleList: { collection: 'userRole', schema: domain.collections.userRole.schema() },
+  }),
 });

@@ -36,7 +36,7 @@
                     <v-card-subtitle>{{ task.description || 'Без описания' }}</v-card-subtitle>
                     <div class="mt-2" @click.stop>
                       <v-chip size="x-small" variant="tonal">
-                        {{ taskTypeLabelByValue.get(task.taskType || 'feature') || 'Фича' }}
+                        {{ taskTypeLabelByValue.get(String(task.taskType || '')) || task.taskType }}
                       </v-chip>
                     </div>
                   </v-card-item>
@@ -141,7 +141,7 @@
         v-if="selectedTask"
         :task="selectedTask"
         :task-id="selectedTaskId"
-        :task-type-label="taskTypeLabelByValue.get(selectedTask.taskType || 'feature') || 'Фича'"
+        :task-type-label="taskTypeLabelByValue.get(String(selectedTask.taskType || ''))"
         :column-title="columnTitleByStatusId[selectedTask.status] || ''"
         :can-move-left="canMoveLeft(selectedTask.status)"
         :can-move-right="canMoveRight(selectedTask.status)"
@@ -164,20 +164,26 @@ import ComplexBlock from './components/ComplexBlock.vue';
 import TaskForm from './components/TaskForm.vue';
 import { useStore } from './stores/store.js';
 
+const globalStore = useStore();
+
 const status = ref('Инициализация...');
 const errorText = ref('');
 const dialog = ref(false);
 const newTitle = ref('');
 const newDescription = ref('');
-const newTaskType = ref('feature');
-const taskTypeOptions = ref([
-  { title: 'Фича', value: 'feature' },
-  { title: 'Баг', value: 'bug' },
-  { title: 'Улучшение', value: 'improvement' },
-  { title: 'Исследование', value: 'research' },
-  { title: 'Техдолг', value: 'chore' },
-]);
-const taskTypeLoading = ref(false);
+const newTaskType = ref('');
+/** Справочник с бэка: `{ id, title }` или `{ value, title }` → единый вид для v-select и подписей */
+const taskTypeOptions = computed(() => {
+  const raw = globalStore.lst.taskTypes;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => ({
+      title: String(item?.title || '').trim(),
+      value: String(item?.value ?? item?.id ?? '').trim(),
+    }))
+    .filter((o) => o.title && o.value);
+});
+const taskTypeLoading = computed(() => Boolean(globalStore.lstLoading.taskTypes));
 const assigneeUserIds = ref([]);
 const creatingTask = ref(false);
 const detailDrawer = ref(false);
@@ -192,7 +198,6 @@ const authLogin = ref('');
 const authPassword = ref('');
 const authFullName = ref([]);
 const authError = ref('');
-const globalStore = useStore();
 let api = null;
 let authResolve = null;
 
@@ -229,16 +234,20 @@ const getTaskMoveMethod = () => api?.core?.taskMove;
 const getTasksListMethod = () => api?.core?.tasksList;
 const getTaskMethod = () => api?.core?.getTask;
 const getTaskCreateMethod = () => api?.core?.addObject;
-const getListMethod = () => api?.core?.list;
+const getLstMethod = () => api?.core?.getLst;
 const selectedTask = computed(() => {
   const id = selectedTaskId.value;
   if (!id) return null;
   return globalStore.store.task[id] || null;
 });
 
-const taskTypeLabelByValue = computed(
-  () => new Map(taskTypeOptions.value.map((option) => [option.value, option.title])),
-);
+const taskTypeLabelByValue = computed(() => {
+  const m = new Map();
+  for (const option of taskTypeOptions.value) {
+    if (option.value) m.set(option.value, option.title);
+  }
+  return m;
+});
 
 const moveTask = async (id, step) => {
   const taskMove = getTaskMoveMethod();
@@ -267,7 +276,7 @@ const closeDialog = () => {
   dialog.value = false;
   newTitle.value = '';
   newDescription.value = '';
-  newTaskType.value = 'feature';
+  newTaskType.value = '';
   if (currentUserId.value) {
     assigneeUserIds.value = [currentUserId.value];
   }
@@ -283,7 +292,7 @@ const openTaskDetail = async (task) => {
   const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
   editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
   detailDrawer.value = true;
-  await loadTaskTypes();
+  // await loadLst();
   await loadTask(id);
 };
 
@@ -313,6 +322,7 @@ const loadTask = async (_id) => {
     if (!patch || typeof patch !== 'object') return;
     globalStore.setData({
       currentUserId: globalStore.currentUserId,
+      lst: res?.lst || {},
       store: patch,
     });
     const task = globalStore.store.task[id];
@@ -347,7 +357,7 @@ const addTask = async () => {
       document: {
         title: newTitle.value.trim(),
         description: newDescription.value.trim(),
-        taskType: String(newTaskType.value || 'feature'),
+        taskType: newTaskType.value,
         status: 'todo',
         userLinks,
       },
@@ -360,29 +370,18 @@ const addTask = async () => {
   }
 };
 
-const loadTaskTypes = async () => {
-  const listMethod = getListMethod();
-  if (!listMethod) return;
-  taskTypeLoading.value = true;
-  try {
-    const response = await listMethod({ name: 'taskTypes' });
-    const taskTypes = Array.isArray(response?.items) ? response.items : [];
-    const normalizedOptions = taskTypes
-      .map((taskType) => ({
-        title: String(taskType?.title || '').trim(),
-        value: String(taskType?.id || '').trim(),
-      }))
-      .filter((taskType) => taskType.title && taskType.value);
-    if (normalizedOptions.length > 0) {
-      taskTypeOptions.value = normalizedOptions;
-    }
-    if (!taskTypeOptions.value.some((option) => option.value === newTaskType.value)) {
-      newTaskType.value = taskTypeOptions.value[0]?.value || 'feature';
-    }
-  } catch {
-    // Keep local defaults if dictionary endpoint is unavailable.
-  } finally {
-    taskTypeLoading.value = false;
+const loadLst = async () => {
+  const lstMethod = getLstMethod();
+  if (!lstMethod) return;
+  await Promise.all([
+    globalStore.fetchLst({ name: 'taskTypes', getLst: lstMethod }),
+    globalStore.fetchLst({ name: 'userRoles', getLst: lstMethod }),
+  ]);
+  if (
+    taskTypeOptions.value.length > 0 &&
+    !taskTypeOptions.value.some((option) => option.value === newTaskType.value)
+  ) {
+    newTaskType.value = taskTypeOptions.value[0]?.value || '';
   }
 };
 
@@ -518,12 +517,13 @@ onMounted(async () => {
     const response = await tasksList();
     globalStore.setData({
       currentUserId: response.currentUserId || '',
+      lst: response.lst,
       store: {
         task: response.tasks || [],
         user: response.users || [],
       },
     });
-    await loadTaskTypes();
+    // await loadLst();
     status.value = 'Подключено';
   } catch (error) {
     status.value = 'Недоступен';
@@ -533,7 +533,12 @@ onMounted(async () => {
 
 watch(dialog, async (opened) => {
   if (!opened) return;
-  await loadTaskTypes();
+  if (
+    taskTypeOptions.value.length > 0 &&
+    (!newTaskType.value || !taskTypeOptions.value.some((o) => o.value === newTaskType.value))
+  ) {
+    newTaskType.value = taskTypeOptions.value[0].value;
+  }
   if (currentUserId.value) {
     assigneeUserIds.value = [currentUserId.value];
   }

@@ -15,12 +15,9 @@ for (const path of Object.keys(modules)) {
   if (mod?.default) byType[key] = mod.default;
 }
 
-const fallback = byType.feature ?? Object.values(byType)[0];
-
 /**
  * Компонент основной вкладки задачи по полю task.taskType (совпадает с id в domain/list/taskTypes).
  */
 export function resolveTaskTypeMainComponent(taskType) {
-  const key = typeof taskType === 'string' && taskType.trim() ? taskType.trim() : 'feature';
-  return byType[key] || fallback;
+  return byType[taskType];
 }

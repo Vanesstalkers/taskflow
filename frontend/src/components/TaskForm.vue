@@ -144,7 +144,7 @@ const docIds = defineModel('docIds', { type: Array, default: () => [] });
 const props = defineProps({
   task: { type: Object, required: true },
   taskId: { type: String, required: true },
-  taskTypeLabel: { type: String, default: 'Фича' },
+  taskTypeLabel: { type: String, default: '' },
   columnTitle: { type: String, default: '' },
   canMoveLeft: { type: Boolean, default: false },
   canMoveRight: { type: Boolean, default: false },

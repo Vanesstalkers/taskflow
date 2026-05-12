@@ -69,7 +69,7 @@
       },
     });
 
-    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema;
+    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema();
     const linkCollection = schema?.[linkField]?.collection;
 
     if (linkCollection) {
@@ -77,10 +77,11 @@
         linkCollection,
         { _id: new npm.mongodb.ObjectId(targetId) },
         {
-          projection: {
-            ...Object.fromEntries(schema?.[linkField]?.fields?.map((field) => [field, 1]) || []),
-            ...domain.collections.getHiddenFields(linkCollection),
-          },
+          // TODO: restore projection
+          // projection: {
+          //   ...Object.fromEntries(schema?.[linkField]?.fields?.map((field) => [field, 1]) || []),
+          //   ...domain.collections.getHiddenFields(linkCollection),
+          // },
         },
       );
 

@@ -1,9 +1,39 @@
 ({
   access: 'public',
   method: async () => {
+    function getTaskSchemaByType(taskType) {
+      const taskModule = domain.collections.task[taskType];
+      if (taskModule && typeof taskModule.schema === 'function') {
+        const schema = taskModule.schema();
+        if (schema && typeof schema === 'object') return schema;
+      }
+      return domain.task.defaultSchema;
+    }
+
+    /** Собрать имена `domain.lst[name]` из полей схемы с атрибутом `lst`. */
+    function collectLstNamesFromSchema(schema) {
+      const names = new Set();
+      if (!schema || typeof schema !== 'object') return names;
+      for (const def of Object.values(schema)) {
+        if (!def || typeof def !== 'object' || Array.isArray(def)) continue;
+        const lst = def.lst;
+        if (typeof lst === 'string' && lst.trim()) names.add(lst.trim());
+      }
+      return names;
+    }
+
+    function buildLstPayload(nameSet) {
+      const lst = {};
+      for (const name of nameSet) {
+        const list = domain.lst[name];
+        if (list && Array.isArray(list.items)) lst[name] = list.items;
+      }
+      return lst;
+    }
+
     const currentUserId = String(context.session.state.userId || '');
     if (!currentUserId) {
-      return { tasks: [], users: [], currentUserId: '' };
+      return { tasks: [], users: [], currentUserId: '', lst: {} };
     }
 
     const documents = await db.mongodb.find(
@@ -52,6 +82,15 @@
       }));
     }
 
-    return { tasks, users, currentUserId };
+    const lstNameSet = new Set();
+    for (const task of tasks) {
+      const schema = getTaskSchemaByType(task.taskType);
+      for (const name of collectLstNamesFromSchema(schema)) {
+        lstNameSet.add(name);
+      }
+    }
+    const lst = buildLstPayload(lstNameSet);
+
+    return { tasks, users, currentUserId, lst };
   },
 });

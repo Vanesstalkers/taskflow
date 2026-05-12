@@ -9,7 +9,6 @@
     <v-file-input
       v-bind="$attrs"
       :model-value="displayedFileModel"
-      variant="underlined"
       :label="label"
       :multiple="multiple"
       :accept="accept"

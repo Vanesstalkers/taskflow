@@ -1,15 +1,5 @@
 <template>
   <div>
-    <Textarea
-      v-model="description"
-      collection="task"
-      :_id="task._id"
-      field="description"
-      label="Описание"
-      rows="4"
-      :context-key="task._id"
-    />
-
     <ComplexBlock
       v-model="createdUserIds"
       :max-selection="1"
@@ -44,6 +34,27 @@
             label="Аватар"
             :context-key="_id"
           />
+          <ComplexBlock
+            v-if="_id"
+            :model-value="userRoleListKeyList(_id)"
+            :items="userRoleItems"
+            pick-creates-document
+            collection="userRole"
+            parent-collection="user"
+            :parent-id="_id"
+            link-field="userRoleList"
+            :context-key="_id"
+            item-title="title"
+            item-value="id"
+            empty-text="Роли не выбраны"
+            add-field-label="Роли"
+            add-placeholder="Выберите роль из списка"
+            :show-create-new-option="false"
+          >
+            <template #label="{ _id: roleId, record }">
+              <span>{{ record?.type || roleId }}</span>
+            </template>
+          </ComplexBlock>
         </div>
       </template>
     </ComplexBlock>
@@ -55,13 +66,26 @@ import { computed } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import InputFile from '../InputFile.vue';
-import Textarea from '../Textarea.vue';
+import { useStore } from '../../stores/store.js';
 
 const props = defineProps({
   task: { type: Object, required: true },
 });
 
-const description = defineModel('description', { type: String, default: '' });
+defineModel('description', { type: String, default: '' });
+
+const globalStore = useStore();
+
+const userRoleItems = computed(() => {
+  const items = globalStore.lst.userRoles;
+  return Array.isArray(items) ? items : [];
+});
+
+function userRoleListKeyList(userId) {
+  const id = String(userId || '').trim();
+  return Object.keys(globalStore.store.user?.[id]?.userRoleList || {}).filter(Boolean);
+}
+
 const createdUserIds = computed({
   get: () => Object.keys(props.task?.createdUserLinks || {}).filter(Boolean),
   set: () => {},

@@ -5,10 +5,10 @@
     _id: '',
     title: '',
     description: '',
-    taskType: '',
+    taskType: { lst: 'taskTypes' },
     status: '',
     userLinks: { collection: 'user' },
-    docLinks: { collection: 'doc', fields: ['fileName', 'title'] },
+    docLinks: { collection: 'doc', schema: domain.collections.doc.schema() },
   },
 
   async move(id, direction) {

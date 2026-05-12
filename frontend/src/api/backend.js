@@ -10,7 +10,7 @@ let state;
 const initBackend = async () => {
   if (state) return state;
 
-  const metacom = Metacom.create(getApiUrl());
+  const metacom = Metacom.create(getApiUrl(), { callTimeout: 100000 });
   await metacom.load("auth", "core", "files");
 
   state = { metacom, api: metacom.api };

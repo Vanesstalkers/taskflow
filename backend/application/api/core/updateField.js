@@ -3,7 +3,7 @@
   method: async ({ collection, _id, field, value }) => {
     // return { status: 'error' };
 
-    const schema = domain.collections[collection].schema;
+    const schema = domain.collections[collection].schema();
     if (schema?.[field]?.onUpdate) value = await schema[field].onUpdate(value);
 
     if (typeof collection !== 'string' || collection.length === 0) {
