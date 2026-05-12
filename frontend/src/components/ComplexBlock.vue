@@ -56,11 +56,35 @@
           'multi-entity-picker__add-slot--create-only':
             hideSearchInput && (showSeparateCreateButton || showAddViaFileInput),
           'multi-entity-picker__add-slot--file-add': showAddViaFileInput,
+          'multi-entity-picker__add-slot--radio-pick': showPickRadioGroup,
         }"
         @focusout="onAddSlotFocusOut"
       >
+        <div
+          v-if="showPickRadioGroup"
+          class="multi-entity-picker__add multi-entity-picker__radio-pick d-flex flex-column ga-2 align-self-stretch"
+        >
+          <div v-if="String(addFieldLabel || '').trim()" class="text-body-2 text-medium-emphasis">
+            {{ addFieldLabel }}
+          </div>
+          <v-radio-group
+            :model-value="radioPickValue"
+            density="compact"
+            hide-details
+            class="multi-entity-picker__radio-group"
+            :disabled="disabled || addingKey !== null || removingKey !== null"
+            @update:model-value="onRadioPickDocument"
+          >
+            <v-radio
+              v-for="(item, idx) in pickRadioItems"
+              :key="`pick-radio-${idx}-${radioPickItemValue(item)}`"
+              :label="radioPickItemTitle(item)"
+              :value="radioPickItemValue(item)"
+            />
+          </v-radio-group>
+        </div>
         <v-autocomplete
-          v-if="showSearchInput"
+          v-else-if="showSearchInput"
           ref="addFieldRef"
           :model-value="addPickerValue"
           v-model:search="search"
@@ -90,8 +114,25 @@
             />
           </template>
         </v-autocomplete>
+        <v-text-field
+          v-if="showSeparateCreateInput && !isAddBlocked"
+          ref="createInputRef"
+          v-model="search"
+          class="multi-entity-picker__add"
+          variant="outlined"
+          density="compact"
+          single-line
+          hide-details="auto"
+          :label="addFieldLabel"
+          :placeholder="addPlaceholder"
+          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :loading="addingKey === ADD_CREATE_NEW_VALUE"
+          autocomplete="off"
+          @keydown.enter.prevent="runCreateNewFromSearch"
+          @blur="runCreateNewFromSearch"
+        />
         <v-btn
-          v-if="showSeparateCreateButton && !isAddBlocked"
+          v-else-if="showSeparateCreateButton && !isAddBlocked"
           type="button"
           variant="tonal"
           size="small"
@@ -120,6 +161,8 @@
     </p>
 
     <p v-if="removeError" class="text-caption text-error mb-2">{{ removeError }}</p>
+
+    <p v-if="linkAddError" class="text-caption text-error mb-2">{{ linkAddError }}</p>
 
     <v-autocomplete
       v-if="!linkPersistEnabled"
@@ -240,6 +283,14 @@ const props = defineProps({
   pickCreatesDocument: { type: Boolean, default: false },
   /** Имя поля в новом документе при `pickCreatesDocument` (для userRole обычно `type`). */
   pickDocumentField: { type: String, default: 'type' },
+  /**
+   * Вместо выпадающего списка — выбор значения из `items` через `v-radio-group` (только с `pickCreatesDocument`).
+   */
+  pickCreatesAsRadio: { type: Boolean, default: false },
+  /**
+   * Вместе с `pickCreatesAsRadio`: полоска выбора (радио) видна сразу, без кнопки «+».
+   */
+  inlinePickRadio: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   /**
    * Вместе с `separateCreateButton`: показывать поле и кнопку «Создать» сразу, без кнопки «+».
@@ -247,6 +298,10 @@ const props = defineProps({
   inlineSeparateCreate: { type: Boolean, default: false },
   /** Скрыть поле поиска / ввод; остаётся кнопка «Создать» (обычно с `separateCreateButton` + `inlineSeparateCreate`). */
   hideSearchInput: { type: Boolean, default: false },
+  /**
+   * Вместо кнопки «Создать» при скрытом поиске — поле ввода; значение уходит в документ как поле `createField`, отправка по Enter.
+   */
+  separateCreateAsInput: { type: Boolean, default: false },
   /** Каждая метка связи на всю ширину (для слота label с полями ввода) */
   fullWidthLabels: { type: Boolean, default: false },
   /**
@@ -277,7 +332,24 @@ const addingKey = ref(null);
 const pendingCreateFromStore = ref(false);
 let pendingCreateResolve = null;
 const removeError = ref('');
+/** Ошибка добавления связи / создания объекта (показ внутри блока + `linkAddError` для родителя). */
+const linkAddError = ref('');
+
+function reportLinkAddError(payload) {
+  let text = '';
+  if (typeof payload === 'string') text = payload.trim();
+  else if (payload && typeof payload.message === 'string') text = String(payload.message).trim();
+  if (!text) text = 'Не удалось добавить';
+  linkAddError.value = text;
+  emit('linkAddError', text);
+}
+
+function clearLinkAddError() {
+  linkAddError.value = '';
+}
 const addPickerValue = ref(null);
+/** Выбранное значение `item-value` в режиме `pickCreatesAsRadio` (сбрасывается после попытки добавления). */
+const radioPickValue = ref(null);
 const removeConfirmOpen = ref(false);
 const removeConfirmKey = ref(null);
 const removeConfirmX = ref(0);
@@ -287,6 +359,7 @@ const removeConfirmEl = ref(null);
 const addExpanded = ref(false);
 const addMenuOpen = ref(false);
 const addFieldRef = ref(null);
+const createInputRef = ref(null);
 
 const remoteOptions = ref([]);
 const internalLoading = ref(false);
@@ -304,11 +377,22 @@ const linkPersistEnabled = computed(() =>
 
 const showSeparateCreateButton = computed(() => props.showCreateNewOption && props.separateCreateButton);
 const showAddViaFileInput = computed(() => props.addViaFileUpload && linkPersistEnabled.value);
+const hideSearchInput = computed(() => props.hideSearchInput === true || props.hideSearchInput === 'true');
+
+const showSeparateCreateInput = computed(
+  () =>
+    showSeparateCreateButton.value &&
+    hideSearchInput.value &&
+    props.separateCreateAsInput &&
+    !showAddViaFileInput.value,
+);
 const inlineAddPersist = computed(
   () => props.inlineSeparateCreate && (props.separateCreateButton || props.addViaFileUpload),
 );
 
-const hideSearchInput = computed(() => props.hideSearchInput === true || props.hideSearchInput === 'true');
+const inlinePickRadioPersist = computed(
+  () => props.inlinePickRadio && props.pickCreatesDocument && props.pickCreatesAsRadio && linkPersistEnabled.value,
+);
 
 /** Поле поиска в полоске добавления (если не скрыто). */
 const showSearchInput = computed(() => !hideSearchInput.value);
@@ -320,6 +404,7 @@ const effectiveRemoteSearch = computed(() => props.remoteSearch && !hideSearchIn
 const showAddSlot = computed(() => {
   if (!linkPersistEnabled.value) return false;
   if (inlineAddPersist.value) return true;
+  if (inlinePickRadioPersist.value) return true;
   return addExpanded.value;
 });
 
@@ -351,6 +436,21 @@ const mergedLoading = computed(() => props.loading || internalLoading.value);
 
 const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : props.items));
 
+const pickRadioItems = computed(() => {
+  if (!props.pickCreatesDocument || !props.pickCreatesAsRadio) return [];
+  const items = effectiveItems.value;
+  return Array.isArray(items) ? items : [];
+});
+
+const showPickRadioGroup = computed(
+  () =>
+    linkPersistEnabled.value &&
+    props.pickCreatesDocument &&
+    props.pickCreatesAsRadio &&
+    !isAddBlocked.value &&
+    pickRadioItems.value.length > 0,
+);
+
 const addFieldItems = computed(() => {
   const base = effectiveItems.value;
   if (!props.showCreateNewOption) return base;
@@ -373,9 +473,7 @@ function pickerRow(record, id) {
   if (primary != null && String(primary).trim() !== '') {
     return { [tk]: String(primary), [vk]: String(id) };
   }
-  const a = String(raw.login || '').trim();
-  const b = String(raw.fullName || '').trim();
-  const title = b && a ? `${b} (${a})` : b || a || String(id);
+  const title = String(raw.login || '').trim() || String(id);
   return { [tk]: title, [vk]: String(id) };
 }
 
@@ -383,6 +481,67 @@ function idFromSearchRow(row) {
   if (!row || typeof row !== 'object') return '';
   const vk = props.itemValue;
   return String(row._id ?? row[vk] ?? '').trim();
+}
+
+function radioPickItemValue(item) {
+  if (!item || typeof item !== 'object') return '';
+  const vk = props.itemValue;
+  const raw = item.raw !== undefined ? item.raw : item;
+  const r = raw && typeof raw === 'object' ? raw : item;
+  return String(r[vk] ?? r._id ?? '').trim();
+}
+
+function radioPickItemTitle(item) {
+  if (!item || typeof item !== 'object') return '';
+  const tk = props.itemTitle;
+  const raw = item.raw !== undefined ? item.raw : item;
+  const r = raw && typeof raw === 'object' ? raw : item;
+  const t = r[tk];
+  if (t != null && String(t).trim() !== '') return String(t);
+  const v = radioPickItemValue(item);
+  return v || String(item);
+}
+
+async function runPickCreatesDocumentAdd(pickId) {
+  const id = String(pickId || '').trim();
+  if (!id || !linkPersistEnabled.value) return;
+
+  if (isAddBlocked.value) {
+    reportLinkAddError(resolvedMaxSelectionMessage.value);
+    radioPickValue.value = null;
+    return;
+  }
+
+  const field = String(props.pickDocumentField || 'type').trim() || 'type';
+  const bucket = getEntityBucket();
+  for (const key of selectedKeys.value) {
+    const rec = bucket[String(key)];
+    if (rec && String(rec[field] ?? '') === id) {
+      reportLinkAddError('Этот пункт уже выбран');
+      radioPickValue.value = null;
+      return;
+    }
+  }
+
+  removeError.value = '';
+  clearLinkAddError();
+  try {
+    await createLinkedDocument({ [field]: id });
+  } catch {
+    // ошибка уже передана через reportLinkAddError
+  } finally {
+    addMenuOpen.value = false;
+    search.value = '';
+    radioPickValue.value = null;
+    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
+      addExpanded.value = false;
+    }
+  }
+}
+
+async function onRadioPickDocument(val) {
+  radioPickValue.value = val;
+  await runPickCreatesDocumentAdd(val);
 }
 
 function getEntityBucket() {
@@ -486,6 +645,7 @@ watch(
     const createdId = (next || []).map((k) => String(k)).find((k) => k && !prevSet.has(k));
     if (!createdId) return;
     pendingCreateFromStore.value = false;
+    clearLinkAddError();
     if (pendingCreateResolve) {
       pendingCreateResolve.resolve(createdId);
       pendingCreateResolve = null;
@@ -497,7 +657,7 @@ watch(
 );
 
 onMounted(() => {
-  if (inlineAddPersist.value) {
+  if (inlineAddPersist.value || inlinePickRadioPersist.value) {
     addExpanded.value = true;
   }
   if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
@@ -523,8 +683,10 @@ watch(
       pendingCreateResolve = null;
     }
     removeError.value = '';
+    clearLinkAddError();
     addPickerValue.value = null;
-    addExpanded.value = inlineAddPersist.value;
+    radioPickValue.value = null;
+    addExpanded.value = inlineAddPersist.value || inlinePickRadioPersist.value;
     addMenuOpen.value = false;
     if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
   },
@@ -538,13 +700,15 @@ watch(showAddSlot, (open) => {
 });
 
 function focusAddInput() {
-  const root = addFieldRef.value?.$el;
+  const refCmp = showSeparateCreateInput.value ? createInputRef.value : addFieldRef.value;
+  const root = refCmp?.$el;
   const input = root?.querySelector?.('input:not([type=hidden])');
   input?.focus();
 }
 
 function openAddField() {
   if (isAddBlocked.value) return;
+  clearLinkAddError();
   addExpanded.value = true;
   addMenuOpen.value = false;
   nextTick(() => {
@@ -607,7 +771,7 @@ watch(removeConfirmOpen, (open) => {
 });
 
 function onAddSlotFocusOut(event) {
-  if (inlineAddPersist.value) return;
+  if (inlineAddPersist.value || inlinePickRadioPersist.value) return;
   const related = event.relatedTarget;
   if (related && typeof related === 'object' && event.currentTarget.contains(related)) return;
   window.setTimeout(() => {
@@ -639,17 +803,20 @@ function getStoreRecord(key) {
 async function createLinkedDocument(document = {}) {
   if (!linkPersistEnabled.value) {
     emit('createNew');
-    throw new Error('Не настроено сохранение связей');
+    const msg = 'Не настроено сохранение связей';
+    reportLinkAddError(msg);
+    throw new Error(msg);
   }
 
   if (isAddBlocked.value) {
     const msg = resolvedMaxSelectionMessage.value;
-    emit('linkAddError', msg);
+    reportLinkAddError(msg);
     throw new Error(msg);
   }
 
   const payload = document && typeof document === 'object' && !Array.isArray(document) ? { ...document } : {};
   removeError.value = '';
+  clearLinkAddError();
   addingKey.value = ADD_CREATE_NEW_VALUE;
 
   const createdIdPromise = new Promise((resolve, reject) => {
@@ -669,6 +836,7 @@ async function createLinkedDocument(document = {}) {
       },
     });
     const createdId = await createdIdPromise;
+    clearLinkAddError();
     return createdId;
   } catch (error) {
     pendingCreateFromStore.value = false;
@@ -676,7 +844,7 @@ async function createLinkedDocument(document = {}) {
       pendingCreateResolve.reject(error);
       pendingCreateResolve = null;
     }
-    emit('linkAddError', error.message || 'Не удалось создать и добавить связь');
+    reportLinkAddError(error);
     throw error;
   } finally {
     addingKey.value = null;
@@ -685,13 +853,14 @@ async function createLinkedDocument(document = {}) {
 
 async function runCreateNewFromSearch() {
   if (!props.showCreateNewOption) return;
+  if (addingKey.value !== null) return;
   if (isAddBlocked.value) {
-    emit('linkAddError', resolvedMaxSelectionMessage.value);
+    reportLinkAddError(resolvedMaxSelectionMessage.value);
     return;
   }
   if (!linkPersistEnabled.value) {
     emit('createNew');
-    if (!inlineAddPersist.value) {
+    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
       addExpanded.value = false;
     }
     addMenuOpen.value = false;
@@ -701,19 +870,20 @@ async function runCreateNewFromSearch() {
 
   const createField = String(props.createField || 'title').trim() || 'title';
   const createValue = String(search.value || '').trim();
-  const document = {};
-  if (createValue) {
-    document[createField] = createValue;
+  if (!createValue) {
+    return;
   }
+  const document = { [createField]: createValue };
 
+  clearLinkAddError();
   try {
     await createLinkedDocument(document);
   } catch {
-    // ошибка уже передана в linkAddError
+    // ошибка уже передана через reportLinkAddError
   } finally {
     addMenuOpen.value = false;
     search.value = '';
-    if (!inlineAddPersist.value) {
+    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
       addExpanded.value = false;
     }
   }
@@ -735,31 +905,7 @@ async function onAddSelected(val) {
 
   if (props.pickCreatesDocument) {
     addPickerValue.value = null;
-    if (isAddBlocked.value) {
-      emit('linkAddError', resolvedMaxSelectionMessage.value);
-      return;
-    }
-    const field = String(props.pickDocumentField || 'type').trim() || 'type';
-    const bucket = getEntityBucket();
-    for (const key of selectedKeys.value) {
-      const rec = bucket[String(key)];
-      if (rec && String(rec[field] ?? '') === id) {
-        emit('linkAddError', 'Этот пункт уже выбран');
-        return;
-      }
-    }
-    removeError.value = '';
-    try {
-      await createLinkedDocument({ [field]: id });
-    } catch {
-      // ошибка уже в linkAddError
-    } finally {
-      addMenuOpen.value = false;
-      search.value = '';
-      if (!inlineAddPersist.value) {
-        addExpanded.value = false;
-      }
-    }
+    await runPickCreatesDocumentAdd(id);
     return;
   }
 
@@ -770,11 +916,12 @@ async function onAddSelected(val) {
 
   if (isAddBlocked.value) {
     addPickerValue.value = null;
-    emit('linkAddError', resolvedMaxSelectionMessage.value);
+    reportLinkAddError(resolvedMaxSelectionMessage.value);
     return;
   }
 
   removeError.value = '';
+  clearLinkAddError();
   addingKey.value = id;
   try {
     const _id = linkParentId.value;
@@ -789,15 +936,16 @@ async function onAddSelected(val) {
       taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
     });
     selectedKeys.value = [...selectedKeys.value, id];
+    clearLinkAddError();
     emit('linkAdded', { targetId: id });
   } catch (error) {
-    emit('linkAddError', error.message || 'Не удалось добавить связь');
+    reportLinkAddError(error);
   } finally {
     addingKey.value = null;
     addPickerValue.value = null;
     addMenuOpen.value = false;
     search.value = '';
-    if (!inlineAddPersist.value) {
+    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
       addExpanded.value = false;
     }
   }
@@ -840,7 +988,7 @@ function onNonLinkSelectionUpdate(next) {
   const arr = Array.isArray(next) ? next.map((k) => String(k)) : [];
   if (max != null && arr.length > max) {
     selectedKeys.value = arr.slice(0, max);
-    emit('linkAddError', resolvedMaxSelectionMessage.value);
+    reportLinkAddError(resolvedMaxSelectionMessage.value);
     return;
   }
   selectedKeys.value = arr;
@@ -926,6 +1074,23 @@ function onNonLinkSelectionUpdate(next) {
   gap: 8px;
   max-width: 100%;
   flex: 1 1 100%;
+}
+
+.multi-entity-picker__add-slot--radio-pick {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  align-self: stretch;
+}
+
+.multi-entity-picker__radio-pick {
+  width: 100%;
+}
+
+.multi-entity-picker__radio-group :deep(.v-label) {
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .multi-entity-picker__add-slot--create-only {

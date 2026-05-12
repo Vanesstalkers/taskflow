@@ -36,6 +36,8 @@
       createdAt: document.createdAt || new Date(),
     };
 
+    await domain.collections.ensureUniqueKeys.assertForInsert(collection, data);
+
     const result = await db.mongodb.insertOne(collection, data);
     const createdId = String(result.insertedId);
     const createdPatch = { _id: createdId, ...data };

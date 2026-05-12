@@ -77,7 +77,7 @@
           :show-create-new-option="false"
         >
           <template #label="{ id, record }">
-            <span>{{ record?.fullName || record?.login || id }}</span>
+            <span>{{ record?.login || id }}</span>
           </template>
         </ComplexBlock>
       </div>

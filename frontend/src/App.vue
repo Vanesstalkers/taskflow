@@ -105,18 +105,6 @@
               :disabled="authLoading"
               @keyup.enter="submitAuth"
             />
-            <v-combobox
-              v-model="authFullName"
-              label="Имя (для регистрации)"
-              variant="outlined"
-              class="mt-3"
-              :disabled="authLoading"
-              multiple
-              chips
-              closable-chips
-              clearable
-              @keyup.enter="submitRegister"
-            />
           </v-card-text>
           <v-alert v-if="authError" type="error" variant="tonal" class="mb-3">
             {{ authError }}
@@ -196,7 +184,6 @@ const authDialog = ref(false);
 const authLoading = ref(false);
 const authLogin = ref('');
 const authPassword = ref('');
-const authFullName = ref([]);
 const authError = ref('');
 let api = null;
 let authResolve = null;
@@ -226,9 +213,7 @@ const currentUserDisplay = computed(() => {
   const user = globalStore.store.user?.[currentUserId.value];
   if (!user) return '';
   const login = String(user.login || '').trim();
-  const fullName = String(user.fullName || '').trim();
-  if (fullName && login) return `${fullName} (${login})`;
-  return fullName || login;
+  return login;
 });
 const getTaskMoveMethod = () => api?.core?.taskMove;
 const getTasksListMethod = () => api?.core?.tasksList;
@@ -377,10 +362,7 @@ const loadLst = async () => {
     globalStore.fetchLst({ name: 'taskTypes', getLst: lstMethod }),
     globalStore.fetchLst({ name: 'userRoles', getLst: lstMethod }),
   ]);
-  if (
-    taskTypeOptions.value.length > 0 &&
-    !taskTypeOptions.value.some((option) => option.value === newTaskType.value)
-  ) {
+  if (taskTypeOptions.value.length > 0 && !taskTypeOptions.value.some((option) => option.value === newTaskType.value)) {
     newTaskType.value = taskTypeOptions.value[0]?.value || '';
   }
 };
@@ -397,7 +379,6 @@ const tryRestoreSession = async () => {
         globalStore.store.user[userId] = {
           userId,
           login: user.login || '',
-          fullName: user.fullName || '',
         };
         globalStore.currentUserId = userId;
       }
@@ -436,11 +417,7 @@ const submitAuth = async () => {
       const user = response?.user;
       if (user?.userId) {
         const userId = String(user.userId);
-        globalStore.store.user[userId] = {
-          userId,
-          login: user.login || '',
-          fullName: user.fullName || '',
-        };
+        globalStore.store.user[userId] = { userId, login: user.login || '' };
         globalStore.currentUserId = userId;
       }
       localStorage.setItem('metarhia.session.token', response.token);
@@ -473,23 +450,17 @@ const submitRegister = async () => {
     const response = await api.auth.register({
       login: authLogin.value.trim(),
       password: authPassword.value,
-      fullName: authFullName.value.join(', ').trim() || authLogin.value.trim(),
     });
     if (response?.token) {
       const user = response?.user;
       if (user?.userId) {
         const userId = String(user.userId);
-        globalStore.store.user[userId] = {
-          userId,
-          login: user.login || '',
-          fullName: user.fullName || '',
-        };
+        globalStore.store.user[userId] = { userId, login: user.login || '' };
         globalStore.currentUserId = userId;
       }
       localStorage.setItem('metarhia.session.token', response.token);
       authDialog.value = false;
       authPassword.value = '';
-      authFullName.value = [];
       if (authResolve) authResolve(true);
       authResolve = null;
       return;

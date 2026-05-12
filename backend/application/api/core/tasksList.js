@@ -73,12 +73,11 @@
 
       const usersData =
         oidList.length > 0
-          ? await db.mongodb.find('user', { _id: { $in: oidList } }, { projection: { login: 1, fullName: 1 } })
+          ? await db.mongodb.find('user', { _id: { $in: oidList } }, { projection: { login: 1 } })
           : [];
       users = usersData.map((user) => ({
         _id: String(user._id || ''),
         login: user.login || '',
-        fullName: user.fullName || '',
       }));
     }
 

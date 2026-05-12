@@ -3,13 +3,16 @@
     <ComplexBlock
       v-model="createdUserIds"
       :max-selection="1"
-      add-placeholder="Поиск по имени или логину (от 3 символов)"
+      add-field-label="Логин"
+      add-placeholder="Введите логин и нажмите Enter"
       collection="user"
       parent-collection="task"
       :parent-id="task._id"
       link-field="createdUserLinks"
       :context-key="task._id"
       separate-create-button
+      separate-create-as-input
+      create-field="login"
       inline-separate-create
       hide-search-input
       full-width-labels

@@ -1,8 +1,8 @@
 ({
   access: 'public',
-  method: async ({ login, password, fullName }) => {
+  method: async ({ login, password }) => {
     const hash = await metarhia.metautil.hashPassword(password);
-    const { userId } = await api.auth.provider.registerUser(login, hash, fullName);
+    const { userId } = await api.auth.provider.registerUser(login, hash);
     const token = api.auth.provider.generateToken();
     const data = { userId };
     context.client.startSession(token, data);
@@ -11,11 +11,7 @@
     return {
       status: 'success',
       token,
-      user: {
-        userId: String(userId),
-        login,
-        fullName: fullName || '',
-      },
+      user: { userId: String(userId), login },
     };
   },
 });

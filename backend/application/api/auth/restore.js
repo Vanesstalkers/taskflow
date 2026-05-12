@@ -8,7 +8,6 @@
       return {
         userId: String(user._id || ''),
         login: user.login || '',
-        fullName: user.fullName || '',
       };
     };
 

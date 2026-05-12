@@ -16,11 +16,7 @@
     return {
       status: 'logged',
       token,
-      user: {
-        userId,
-        login: user.login || '',
-        fullName: user.fullName || '',
-      },
+      user: { userId, login: user.login || '' },
     };
   },
 });

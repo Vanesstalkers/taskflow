@@ -41,7 +41,7 @@
     return db.mongodb.deleteOne(api.auth.provider.sessionsCollection, { token });
   },
 
-  async registerUser(login, password, fullName) {
+  async registerUser(login, password) {
     const existing = await api.auth.provider.getUser(login);
     if (existing) {
       throw new Error('User already exists');
@@ -50,7 +50,6 @@
     const result = await db.mongodb.insertOne(api.auth.provider.usersCollection, {
       login,
       password,
-      fullName: fullName || '',
       createdAt: now,
       updatedAt: now,
     });

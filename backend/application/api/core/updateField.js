@@ -1,11 +1,6 @@
 ({
   access: 'public',
   method: async ({ collection, _id, field, value }) => {
-    // return { status: 'error' };
-
-    const schema = domain.collections[collection].schema();
-    if (schema?.[field]?.onUpdate) value = await schema[field].onUpdate(value);
-
     if (typeof collection !== 'string' || collection.length === 0) {
       throw new Error('Parameter "collection" must be a non-empty string');
     }
@@ -23,6 +18,11 @@
     if (!validField) {
       throw new Error('Invalid field name');
     }
+
+    const schema = domain.collections[collection].schema();
+    if (schema?.[field]?.onUpdate) value = await schema[field].onUpdate(value);
+
+    await domain.collections.ensureUniqueKeys.assertForFieldUpdate(collection, _id, field, value);
 
     const updatedAt = new Date();
     const result = await db.mongodb.updateOne(

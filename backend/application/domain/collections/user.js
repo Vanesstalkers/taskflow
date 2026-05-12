@@ -1,6 +1,7 @@
 ({
-  /** Поля MongoDB для текстового поиска (`api.core.search`, коллекция `user`) */
-  searchFields: ['login', 'fullName'],
+  searchFields: ['login'],
+  /** Поля, которые не должны повторяться между документами (`addObject`, `updateField`). */
+  uniqueKey: ['login', 'password'],
   schema: () => ({
     login: '',
     password: {
