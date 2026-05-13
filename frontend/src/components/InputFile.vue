@@ -43,7 +43,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { getBackendState } from '../api/backend.js';
+import { getBackendState } from '../main.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -55,7 +55,7 @@ const fileName = defineModel({ type: String, default: '' });
 const props = defineProps({
   /** Идентификатор документа; при создании через связь можно не передавать */
   _id: { type: String, default: '' },
-  /** Создание записи и связи перед первой загрузкой (слот `add` у ComplexBlock) */
+  /** Создание записи и связи перед первой загрузкой (`ComplexBlock` с `:add="{ addType: 'file' }"`) */
   createLinkedDocument: { type: Function, default: null },
   /** Коллекция MongoDB (как в core/updateField) */
   collection: { type: String, required: true },

@@ -1,6 +1,6 @@
 ({
   access: 'public',
-  method: async ({ collection, _id, field, value }) => {
+  method: async ({ collection, _id, field, value, taskType }) => {
     if (typeof collection !== 'string' || collection.length === 0) {
       throw new Error('Parameter "collection" must be a non-empty string');
     }
@@ -19,10 +19,11 @@
       throw new Error('Invalid field name');
     }
 
-    const schema = domain.collections[collection].schema();
+    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema();
     if (schema?.[field]?.onUpdate) value = await schema[field].onUpdate(value);
 
-    await domain.collections.ensureUniqueKeys.assertForFieldUpdate(collection, _id, field, value);
+    const data = { collection, _id, field, value, taskType };
+    await domain.collections.utils.ensureUniqueKeys.assertForFieldUpdate(data);
 
     const updatedAt = new Date();
     const result = await db.mongodb.updateOne(
@@ -36,7 +37,13 @@
     }
 
     context.client.emit('core/updateStore', {
-      [collection]: { [_id]: { [field]: value, updatedAt, ...domain.collections.getHiddenFields(collection) } },
+      [collection]: {
+        [_id]: {
+          [field]: value,
+          updatedAt,
+          ...domain.collections.utils.getHiddenFields({ collection, taskType }),
+        },
+      },
     });
 
     return { status: 'ok' };

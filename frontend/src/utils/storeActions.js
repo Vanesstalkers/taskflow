@@ -1,5 +1,5 @@
 import { getActivePinia } from 'pinia';
-import { getApi, getBackendState } from '../api/backend.js';
+import { getApi, getBackendState } from '../main.js';
 import { useStore } from '../stores/store.js';
 import { mergeDeep } from './mergeDeep.js';
 
@@ -61,7 +61,8 @@ export async function saveField(params) {
     throw new Error('API updateField недоступен');
   }
   const { collection, _id, field, value } = params;
-  const result = await method({ collection, _id, field, value });
+  const taskType = getStoreBuckets().task[_id]?.taskType;
+  const result = await method({ collection, _id, field, value, taskType });
   assertUpdateFieldOk(result);
   return result;
 }

@@ -59,44 +59,49 @@
       <div v-show="panelActiveTab === 'assignees'">
         <ComplexBlock
           v-model="assigneeUserIds"
-          remote-search
-          collection="user"
-          :error="!!panelFieldErrors.assignees"
-          :error-messages="panelFieldErrors.assignees ? [panelFieldErrors.assignees] : []"
-          empty-text="Исполнители не выбраны"
-          add-placeholder="Поиск по имени или логину (от 3 символов)"
-          parent-collection="task"
-          :parent-id="taskId"
-          link-field="userLinks"
-          :min-selection="1"
-          :context-key="taskId"
+          :persist="{
+            collection: 'user',
+            parentCollection: 'task',
+            parentId: taskId,
+            linkField: 'userLinks',
+            contextKey: taskId,
+          }"
+          :texts="{
+            emptyText: 'Исполнители не выбраны',
+            addPlaceholder: 'Поиск по имени или логину (от 3 символов)',
+          }"
+          :add="{ addType: 'search', showCreateNewOption: false }"
+          :status="{
+            error: !!panelFieldErrors.assignees,
+            errorMessages: panelFieldErrors.assignees ? [panelFieldErrors.assignees] : [],
+          }"
+          :selection="{ minSelection: 1 }"
           @link-remove-error="panelFieldErrors.assignees = $event"
           @link-removed="panelFieldErrors.assignees = ''"
           @link-add-error="panelFieldErrors.assignees = $event"
           @link-added="panelFieldErrors.assignees = ''"
-          :show-create-new-option="false"
         >
-          <template #label="{ id, record }">
-            <span>{{ record?.login || id }}</span>
+          <template #label="{ _id, record }">
+            <span>{{ record?.login || _id }}</span>
           </template>
         </ComplexBlock>
       </div>
       <div v-show="panelActiveTab === 'files'">
         <ComplexBlock
           v-model="docIds"
-          remote-search
-          collection="doc"
-          :error="!!panelFieldErrors.files"
-          :error-messages="panelFieldErrors.files ? [panelFieldErrors.files] : []"
-          parent-collection="task"
-          :parent-id="taskId"
-          link-field="docLinks"
-          :context-key="taskId"
-          inline-separate-create
-          hide-search-input
-          add-via-file-upload
-          :show-create-new-option="false"
-          full-width-labels
+          :persist="{
+            collection: 'doc',
+            parentCollection: 'task',
+            parentId: taskId,
+            linkField: 'docLinks',
+            contextKey: taskId,
+          }"
+          :add="{ addType: 'file', addPlacement: 'inline', showCreateNewOption: false }"
+          :status="{
+            error: !!panelFieldErrors.files,
+            errorMessages: panelFieldErrors.files ? [panelFieldErrors.files] : [],
+          }"
+          :ui="{ fullWidthLabels: true }"
           @link-remove-error="panelFieldErrors.files = $event"
           @link-removed="panelFieldErrors.files = ''"
           @link-add-error="panelFieldErrors.files = $event"
@@ -129,17 +134,37 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, watch } from 'vue';
+import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import ComplexBlock from './ComplexBlock.vue';
 import Input from './Input.vue';
 import InputFile from './InputFile.vue';
 import InputInline from './InputInline.vue';
 import { resolveTaskTypeMainComponent } from './tasks/registry.js';
-import { clearPanelFieldErrors, panelActiveTab, panelFieldErrors } from '../state/detailPanelState.js';
+import { useStore } from '../stores/store.js';
 
-const description = defineModel('description', { type: String, default: '' });
-const assigneeUserIds = defineModel('assigneeUserIds', { type: Array, default: () => [] });
-const docIds = defineModel('docIds', { type: Array, default: () => [] });
+/** Ошибки полей детальной панели (валидация / сеть). */
+const panelFieldErrors = reactive({
+  title: '',
+  description: '',
+  assignees: '',
+  files: '',
+});
+
+const panelActiveTab = ref('main');
+
+function clearPanelFieldErrors() {
+  panelFieldErrors.title = '';
+  panelFieldErrors.description = '';
+  panelFieldErrors.assignees = '';
+  panelFieldErrors.files = '';
+}
+
+const globalStore = useStore();
+const currentUserId = computed(() => String(globalStore.currentUserId || ''));
+
+const description = ref('');
+const assigneeUserIds = ref([]);
+const docIds = ref([]);
 
 const props = defineProps({
   task: { type: Object, required: true },
@@ -155,12 +180,31 @@ defineEmits(['close', 'move']);
 
 const taskMainComponent = computed(() => resolveTaskTypeMainComponent(props.task?.taskType));
 
+function syncFromTask(task) {
+  if (!task) return;
+  description.value = task.description || '';
+  docIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
+  const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
+  assigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
+}
+
 watch(
   () => props.taskId,
   () => {
     clearPanelFieldErrors();
     panelActiveTab.value = 'main';
+    if (props.task) syncFromTask(props.task);
   },
+  { immediate: true },
+);
+
+watch(
+  () => props.task,
+  (task) => {
+    if (!task || String(task._id) !== String(props.taskId)) return;
+    syncFromTask(task);
+  },
+  { deep: true },
 );
 
 onUnmounted(() => {

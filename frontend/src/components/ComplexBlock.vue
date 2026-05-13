@@ -2,18 +2,18 @@
   <div class="multi-entity-picker">
     <div class="multi-entity-picker__labels d-flex flex-wrap ga-2 align-center mb-3">
       <span v-if="selectedKeys.length === 0" class="text-body-2 text-medium-emphasis align-self-center">
-        {{ emptyText }}
+        {{ flat.emptyText }}
       </span>
 
       <div
         v-for="key in selectedKeys"
         :key="String(key)"
         class="multi-entity-picker__label text-body-2"
-        :class="{ 'multi-entity-picker__label--full-width': fullWidthLabels }"
+        :class="{ 'multi-entity-picker__label--full-width': flat.fullWidthLabels }"
       >
         <span
           class="multi-entity-picker__label-text"
-          :class="{ 'multi-entity-picker__label-text--full-width': fullWidthLabels }"
+          :class="{ 'multi-entity-picker__label-text--full-width': flat.fullWidthLabels }"
         >
           <slot name="label" :_id="String(key)" :record="getStoreRecord(key)">
             {{ key }}
@@ -28,51 +28,53 @@
           size="x-small"
           color="medium-emphasis"
           class="multi-entity-picker__remove"
-          :disabled="disabled || removingKey !== null || addingKey !== null || isRemoveBlocked"
+          :disabled="flat.disabled || removingKey !== null || addingKey !== null || isRemoveBlocked"
           :loading="removingKey === String(key)"
           @click.stop="requestRemove(key, $event)"
         />
       </div>
 
-      <v-btn
-        v-if="linkPersistEnabled && !showAddSlot"
-        type="button"
-        icon="mdi-plus"
-        variant="text"
-        density="compact"
-        size="small"
-        class="multi-entity-picker__add-trigger"
-        :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
-        :loading="mergedLoading || addingKey !== null"
-        aria-label="Добавить"
-        @click="openAddField"
-      />
+      <template v-if="canAddMoreLinks">
+        <v-btn
+          v-if="!showAddSlot"
+          type="button"
+          icon="mdi-plus"
+          variant="text"
+          density="compact"
+          size="small"
+          class="multi-entity-picker__add-trigger"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
+          :loading="mergedLoading || addingKey !== null"
+          aria-label="Добавить"
+          @click="openAddField"
+        />
 
-      <div
-        v-if="showAddSlot"
-        class="multi-entity-picker__add-slot"
-        :class="{
-          'multi-entity-picker__add-slot--with-create-btn': showSeparateCreateButton,
-          'multi-entity-picker__add-slot--create-only':
-            hideSearchInput && (showSeparateCreateButton || showAddViaFileInput),
-          'multi-entity-picker__add-slot--file-add': showAddViaFileInput,
-          'multi-entity-picker__add-slot--radio-pick': showPickRadioGroup,
-        }"
-        @focusout="onAddSlotFocusOut"
-      >
+        <div
+          v-if="showAddSlot"
+          class="multi-entity-picker__add-slot"
+          :class="{
+            'multi-entity-picker__add-slot--with-create-btn': showSeparateCreateButton,
+            'multi-entity-picker__add-slot--create-only':
+              hideSearchInput &&
+              (showSeparateCreateButton || showAddViaFileInput || showSeparateCreateInput),
+            'multi-entity-picker__add-slot--file-add': showAddViaFileInput,
+            'multi-entity-picker__add-slot--radio-pick': showPickRadioGroup,
+          }"
+          @focusout="onAddSlotFocusOut"
+        >
         <div
           v-if="showPickRadioGroup"
           class="multi-entity-picker__add multi-entity-picker__radio-pick d-flex flex-column ga-2 align-self-stretch"
         >
-          <div v-if="String(addFieldLabel || '').trim()" class="text-body-2 text-medium-emphasis">
-            {{ addFieldLabel }}
+          <div v-if="String(flat.addFieldLabel || '').trim()" class="text-body-2 text-medium-emphasis">
+            {{ flat.addFieldLabel }}
           </div>
           <v-radio-group
             :model-value="radioPickValue"
             density="compact"
             hide-details
             class="multi-entity-picker__radio-group"
-            :disabled="disabled || addingKey !== null || removingKey !== null"
+            :disabled="flat.disabled || addingKey !== null || removingKey !== null"
             @update:model-value="onRadioPickDocument"
           >
             <v-radio
@@ -95,16 +97,16 @@
           single-line
           :items="addFieldItems"
           :loading="mergedLoading || addingKey !== null"
-          :error="error"
-          :error-messages="errorMessages"
-          :item-title="itemTitle"
-          :item-value="itemValue"
-          :label="addFieldLabel"
-          :placeholder="addPlaceholder"
+          :error="flat.error"
+          :error-messages="flat.errorMessages"
+          :item-title="flat.itemTitle"
+          :item-value="flat.itemValue"
+          :label="flat.addFieldLabel"
+          :placeholder="flat.addPlaceholder"
           no-filter
           clearable
           hide-details="auto"
-          :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
           @update:model-value="onAddSelected"
         >
           <template #item="{ props: listItemProps, item }">
@@ -115,7 +117,7 @@
           </template>
         </v-autocomplete>
         <v-text-field
-          v-if="showSeparateCreateInput && !isAddBlocked"
+          v-if="showSeparateCreateInput"
           ref="createInputRef"
           v-model="search"
           class="multi-entity-picker__add"
@@ -123,41 +125,42 @@
           density="compact"
           single-line
           hide-details="auto"
-          :label="addFieldLabel"
-          :placeholder="addPlaceholder"
-          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :label="flat.addFieldLabel"
+          :placeholder="flat.addPlaceholder"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
           :loading="addingKey === ADD_CREATE_NEW_VALUE"
           autocomplete="off"
           @keydown.enter.prevent="runCreateNewFromSearch"
           @blur="runCreateNewFromSearch"
         />
         <v-btn
-          v-else-if="showSeparateCreateButton && !isAddBlocked"
+          v-else-if="showSeparateCreateButton"
           type="button"
           variant="tonal"
           size="small"
           class="multi-entity-picker__create-btn flex-shrink-0 align-self-center"
-          :disabled="disabled || addingKey !== null || removingKey !== null"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
           :loading="addingKey === ADD_CREATE_NEW_VALUE"
           @click="runCreateNewFromSearch"
         >
-          {{ createButtonLabel }}
+          {{ flat.createButtonLabel }}
         </v-btn>
         <InputFile
           v-if="showAddViaFileInput"
           :collection="entityStoreCollection"
-          :field="addFileField"
-          :label="addFileLabel"
-          :multiple="addFileMultiple"
+          :field="flat.addFileField"
+          :label="flat.addFileLabel"
+          :multiple="flat.addFileMultiple"
           :create-linked-document="createLinkedDocument"
-          :disabled="disabled || addingKey !== null || removingKey !== null || isAddBlocked"
-          :context-key="`${String(contextKey || parentId || '')}:add-file`"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
+          :context-key="`${String(flat.contextKey || flat.parentId || '')}:add-file`"
         />
-      </div>
+        </div>
+      </template>
     </div>
 
-    <p v-if="error && linkPersistEnabled && !showAddSlot && errorMessages.length" class="text-caption text-error mb-2">
-      {{ errorMessages[0] }}
+    <p v-if="flat.error && linkPersistEnabled && !showAddSlot && flat.errorMessages.length" class="text-caption text-error mb-2">
+      {{ flat.errorMessages[0] }}
     </p>
 
     <p v-if="removeError" class="text-caption text-error mb-2">{{ removeError }}</p>
@@ -173,16 +176,16 @@
       density="comfortable"
       :items="effectiveItems"
       :loading="mergedLoading"
-      :error="error"
-      :error-messages="errorMessages"
-      :item-title="itemTitle"
-      :item-value="itemValue"
-      :label="pickerLabel"
+      :error="flat.error"
+      :error-messages="flat.errorMessages"
+      :item-title="flat.itemTitle"
+      :item-value="flat.itemValue"
+      :label="flat.pickerLabel"
       no-filter
       multiple
       clearable
       hide-details="auto"
-      :disabled="disabled"
+      :disabled="flat.disabled"
     >
       <template #selection />
     </v-autocomplete>
@@ -208,7 +211,7 @@
           color="error"
           density="comfortable"
           size="small"
-          :disabled="disabled || removingKey !== null || addingKey !== null"
+          :disabled="flat.disabled || removingKey !== null || addingKey !== null"
           @click="confirmRemove"
         >
           Удалить
@@ -229,7 +232,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { getApi } from '../api/backend.js';
+import { getApi } from '../main.js';
 import { addObject as callAddObject, updateLink as callUpdateLink } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
 import InputFile from './InputFile.vue';
@@ -240,79 +243,23 @@ const selectedKeys = defineModel({ type: Array, default: () => [] });
 const search = defineModel('search', { type: String, default: '' });
 
 const props = defineProps({
-  items: { type: Array, default: () => [] },
-  itemTitle: { type: String, default: 'title' },
-  itemValue: { type: String, default: 'value' },
-  loading: { type: Boolean, default: false },
-  error: { type: Boolean, default: false },
-  errorMessages: { type: Array, default: () => [] },
-  emptyText: { type: String, default: '' },
-  pickerLabel: { type: String, default: 'Выбрать из списка' },
-  /** Подпись у встроенного поля добавления (режим link) */
-  addFieldLabel: { type: String, default: '' },
-  /** Плейсхолдер поля поиска при `remoteSearch` */
-  addPlaceholder: { type: String, default: 'Минимум 3 символа для поиска' },
-  _id: { type: String, default: '' },
-  /** Ключ среза в глобальном сторе (store.store): подпись из store[collection][id выбранного ключа] */
-  collection: { type: String, default: '' },
-  parentCollection: { type: String, default: '' },
-  parentId: { type: String, default: '' },
-  linkField: { type: String, default: '' },
-  minSelection: { type: Number, default: 0 },
-  /** Не больше стольки выбранных объектов (0 — без ограничения). Режим link и обычный multiple. */
-  maxSelection: { type: Number, default: 0 },
-  /** Текст при попытке превысить лимит (пустой — сообщение по умолчанию) */
-  maxSelectionMessage: { type: String, default: '' },
-  /** Текст в tooltip-подтверждении удаления (пустой — сообщение по умолчанию) */
-  removeConfirmText: { type: String, default: '' },
-  contextKey: { type: String, default: '' },
-  /** Первый пункт «Создать» в списке добавления (режим link) */
-  showCreateNewOption: { type: Boolean, default: true },
-  /** Кнопка «Создать» рядом с полем, без пункта в выпадающем списке */
-  separateCreateButton: { type: Boolean, default: false },
-  /** Текст кнопки при `separateCreateButton` */
-  createButtonLabel: { type: String, default: 'Добавить' },
-  /** Поле документа, куда попадёт введённый текст поиска */
-  createField: { type: String, default: 'title' },
-  /** Загрузка списка через `api.core.search` по пропу `collection` */
-  remoteSearch: { type: Boolean, default: false },
+  /** Связь и контекст: коллекция сущности, родитель, поле связи, ключ для сброса/фокуса */
+  persist: { type: Object, default: () => ({}) },
+  /** Список и поля строки опции */
+  list: { type: Object, default: () => ({}) },
+  /** Подписи и сообщения */
+  texts: { type: Object, default: () => ({}) },
+  /** minSelection, maxSelection, maxSelectionMessage */
+  selection: { type: Object, default: () => ({}) },
+  /** loading, error, errorMessages */
+  status: { type: Object, default: () => ({}) },
   /**
-   * Выбор пункта из `items` создаёт новый документ `collection` с полем `pickDocumentField` = выбранное значение (`item-value`) и связь через `addObject`, а не `updateLink` на существующий id.
-   * Для справочников `{ id, title }`: `item-value="id"`, `item-title="title"`.
+   * addType, addPlacement, showCreateNewOption, separateCreateButton, createButtonLabel, createField,
+   * pickCreatesDocument, pickDocumentField, addFileField, addFileLabel, addFileMultiple
    */
-  pickCreatesDocument: { type: Boolean, default: false },
-  /** Имя поля в новом документе при `pickCreatesDocument` (для userRole обычно `type`). */
-  pickDocumentField: { type: String, default: 'type' },
-  /**
-   * Вместо выпадающего списка — выбор значения из `items` через `v-radio-group` (только с `pickCreatesDocument`).
-   */
-  pickCreatesAsRadio: { type: Boolean, default: false },
-  /**
-   * Вместе с `pickCreatesAsRadio`: полоска выбора (радио) видна сразу, без кнопки «+».
-   */
-  inlinePickRadio: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
-  /**
-   * Вместе с `separateCreateButton`: показывать поле и кнопку «Создать» сразу, без кнопки «+».
-   */
-  inlineSeparateCreate: { type: Boolean, default: false },
-  /** Скрыть поле поиска / ввод; остаётся кнопка «Создать» (обычно с `separateCreateButton` + `inlineSeparateCreate`). */
-  hideSearchInput: { type: Boolean, default: false },
-  /**
-   * Вместо кнопки «Создать» при скрытом поиске — поле ввода; значение уходит в документ как поле `createField`, отправка по Enter.
-   */
-  separateCreateAsInput: { type: Boolean, default: false },
-  /** Каждая метка связи на всю ширину (для слота label с полями ввода) */
-  fullWidthLabels: { type: Boolean, default: false },
-  /**
-   * Режим link: в полоске добавления показать загрузку файлов вместо кнопки «Создать» —
-   * для каждого файла создаётся документ `collection` и связь (как `createLinkedDocument` + InputFile).
-   */
-  addViaFileUpload: { type: Boolean, default: false },
-  /** Имя поля в новом документе, куда пишется имя загруженного файла */
-  addFileField: { type: String, default: 'fileName' },
-  addFileLabel: { type: String, default: 'Добавить файлы' },
-  addFileMultiple: { type: Boolean, default: true },
+  add: { type: Object, default: () => ({}) },
+  /** disabled, fullWidthLabels */
+  ui: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -323,6 +270,19 @@ const emit = defineEmits([
   /** Выбор пункта «Создать» в списке добавления */
   'createNew',
 ]);
+
+const ADD_TYPES = ['select', 'search', 'radio', 'input', 'button', 'file'];
+
+function normalizeAddType(v) {
+  const s = String(v || '').toLowerCase().trim();
+  return ADD_TYPES.includes(s) ? s : '';
+}
+
+function normalizeAddPlacement(v) {
+  const s = String(v || '').toLowerCase().trim();
+  if (s === 'inline' || s === 'collapsed') return s;
+  return '';
+}
 
 /** Служебное значение первого пункта списка (не ID сущности) */
 const ADD_CREATE_NEW_VALUE = '__multiEntityPicker_createNew__';
@@ -348,7 +308,7 @@ function clearLinkAddError() {
   linkAddError.value = '';
 }
 const addPickerValue = ref(null);
-/** Выбранное значение `item-value` в режиме `pickCreatesAsRadio` (сбрасывается после попытки добавления). */
+/** Значение `item-value` в режиме `addType="radio"` (сбрасывается после добавления). */
 const radioPickValue = ref(null);
 const removeConfirmOpen = ref(false);
 const removeConfirmKey = ref(null);
@@ -364,66 +324,134 @@ const createInputRef = ref(null);
 const remoteOptions = ref([]);
 const internalLoading = ref(false);
 
-/** Документ, к которому пишется linkField (API updateLink / addObject) */
-const linkParentCollection = computed(() => String(props.parentCollection || '').trim());
-const linkParentId = computed(() => String(props.parentId || '').trim());
+function obj(x) {
+  return x && typeof x === 'object' && !Array.isArray(x) ? x : {};
+}
 
-/** Ключ в store для записей связанной сущности (подписи чипов) */
-const entityStoreCollection = computed(() => String(props.collection || '').trim());
+/** Плоские значения с учётом групп `persist` / `list` / `texts` / … и дефолтов */
+const flat = computed(() => {
+  const persist = obj(props.persist);
+  const list = obj(props.list);
+  const texts = obj(props.texts);
+  const selection = obj(props.selection);
+  const status = obj(props.status);
+  const add = obj(props.add);
+  const ui = obj(props.ui);
+
+  const minSel = Number(selection.minSelection ?? 0);
+  const maxSel = Number(selection.maxSelection ?? 0);
+
+  return {
+    collection: String(persist.collection ?? '').trim(),
+    parentCollection: String(persist.parentCollection ?? '').trim(),
+    parentId: String(persist.parentId ?? '').trim(),
+    linkField: String(persist.linkField ?? '').trim(),
+    contextKey: String(persist.contextKey ?? '').trim(),
+
+    items: Array.isArray(list.items) ? list.items : [],
+    itemTitle: String(list.itemTitle ?? 'title'),
+    itemValue: String(list.itemValue ?? 'value'),
+
+    emptyText: String(texts.emptyText ?? ''),
+    pickerLabel: String(texts.pickerLabel ?? 'Выбрать из списка'),
+    addFieldLabel: String(texts.addFieldLabel ?? ''),
+    addPlaceholder: String(texts.addPlaceholder ?? 'Минимум 3 символа для поиска'),
+    maxSelectionMessage: String(texts.maxSelectionMessage ?? ''),
+    removeConfirmText: String(texts.removeConfirmText ?? ''),
+
+    minSelection: Number.isFinite(minSel) ? minSel : 0,
+    maxSelection: Number.isFinite(maxSel) ? maxSel : 0,
+
+    loading: Boolean(status.loading),
+    error: Boolean(status.error),
+    errorMessages: Array.isArray(status.errorMessages) ? status.errorMessages : [],
+
+    addType: String(add.addType ?? 'select'),
+    addPlacement: String(add.addPlacement ?? 'collapsed'),
+    showCreateNewOption: add.showCreateNewOption !== false,
+    separateCreateButton: Boolean(add.separateCreateButton),
+    createButtonLabel: String(add.createButtonLabel ?? 'Добавить'),
+    createField: String(add.createField ?? 'title'),
+    pickCreatesDocument: Boolean(add.pickCreatesDocument),
+    pickDocumentField: String(add.pickDocumentField ?? 'type'),
+    addFileField: String(add.addFileField ?? 'fileName'),
+    addFileLabel: String(add.addFileLabel ?? 'Добавить файлы'),
+    addFileMultiple: add.addFileMultiple !== false,
+
+    disabled: Boolean(ui.disabled),
+    fullWidthLabels: Boolean(ui.fullWidthLabels),
+  };
+});
+
+const linkParentCollection = computed(() => flat.value.parentCollection);
+const linkParentId = computed(() => flat.value.parentId);
+const entityStoreCollection = computed(() => flat.value.collection);
 
 const linkPersistEnabled = computed(() =>
-  Boolean(linkParentCollection.value && linkParentId.value && props.linkField?.trim()),
+  Boolean(flat.value.parentCollection && flat.value.parentId && flat.value.linkField),
 );
 
-const showSeparateCreateButton = computed(() => props.showCreateNewOption && props.separateCreateButton);
-const showAddViaFileInput = computed(() => props.addViaFileUpload && linkPersistEnabled.value);
-const hideSearchInput = computed(() => props.hideSearchInput === true || props.hideSearchInput === 'true');
+const resolvedAddType = computed(() => normalizeAddType(flat.value.addType) || 'select');
 
-const showSeparateCreateInput = computed(
-  () =>
-    showSeparateCreateButton.value &&
-    hideSearchInput.value &&
-    props.separateCreateAsInput &&
-    !showAddViaFileInput.value,
-);
-const inlineAddPersist = computed(
-  () => props.inlineSeparateCreate && (props.separateCreateButton || props.addViaFileUpload),
-);
+const explicitAddPlacement = computed(() => normalizeAddPlacement(flat.value.addPlacement));
 
-const inlinePickRadioPersist = computed(
-  () => props.inlinePickRadio && props.pickCreatesDocument && props.pickCreatesAsRadio && linkPersistEnabled.value,
-);
+const addPlacementResolved = computed(() => {
+  const ex = explicitAddPlacement.value;
+  return ex === 'inline' ? 'inline' : 'collapsed';
+});
+
+const hideSearchInput = computed(() => {
+  const t = resolvedAddType.value;
+  return t === 'input' || t === 'button' || t === 'file' || t === 'radio';
+});
+
+const showAddViaFileInput = computed(() => linkPersistEnabled.value && resolvedAddType.value === 'file');
 
 /** Поле поиска в полоске добавления (если не скрыто). */
 const showSearchInput = computed(() => !hideSearchInput.value);
 
-/** Учитывает `hideSearchInput`: при скрытом поле не дергаем api.search. */
-const effectiveRemoteSearch = computed(() => props.remoteSearch && !hideSearchInput.value);
+const effectiveRemoteSearch = computed(() => resolvedAddType.value === 'search');
 
-/** Полоска добавления (поле + опционально кнопка «Создать») видна сразу или после «+». */
+const showSeparateCreateButton = computed(() => {
+  if (!linkPersistEnabled.value || !flat.value.showCreateNewOption) return false;
+  if (resolvedAddType.value === 'button') return true;
+  if (resolvedAddType.value === 'input' || resolvedAddType.value === 'file' || resolvedAddType.value === 'radio') {
+    return false;
+  }
+  return flat.value.separateCreateButton;
+});
+
+const showSeparateCreateInput = computed(
+  () =>
+    linkPersistEnabled.value &&
+    flat.value.showCreateNewOption &&
+    !showAddViaFileInput.value &&
+    resolvedAddType.value === 'input',
+);
+
+/** Полоска добавления видна сразу или после «+». */
 const showAddSlot = computed(() => {
   if (!linkPersistEnabled.value) return false;
-  if (inlineAddPersist.value) return true;
-  if (inlinePickRadioPersist.value) return true;
+  if (addPlacementResolved.value === 'inline') return true;
   return addExpanded.value;
 });
 
-const isRemoveBlocked = computed(() => props.minSelection > 0 && selectedKeys.value.length <= props.minSelection);
+const isRemoveBlocked = computed(() => flat.value.minSelection > 0 && selectedKeys.value.length <= flat.value.minSelection);
 
 const maxSelectionEffective = computed(() => {
-  const n = Number(props.maxSelection);
+  const n = Number(flat.value.maxSelection);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 });
 
 const resolvedMaxSelectionMessage = computed(() => {
-  const custom = String(props.maxSelectionMessage || '').trim();
+  const custom = String(flat.value.maxSelectionMessage || '').trim();
   if (custom) return custom;
   const lim = maxSelectionEffective.value;
   return lim != null ? `Можно добавить не более ${lim}` : '';
 });
 
 const resolvedRemoveConfirmText = computed(() => {
-  const custom = String(props.removeConfirmText || '').trim();
+  const custom = String(flat.value.removeConfirmText || '').trim();
   if (custom) return custom;
   return '';
 });
@@ -432,12 +460,15 @@ const isAddBlocked = computed(
   () => maxSelectionEffective.value != null && selectedKeys.value.length >= maxSelectionEffective.value,
 );
 
-const mergedLoading = computed(() => props.loading || internalLoading.value);
+/** Показ всех контролов добавления связи (кнопка «+» и полоска); скрывается целиком при достижении maxSelection */
+const canAddMoreLinks = computed(() => linkPersistEnabled.value && !isAddBlocked.value);
 
-const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : props.items));
+const mergedLoading = computed(() => flat.value.loading || internalLoading.value);
+
+const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : flat.value.items));
 
 const pickRadioItems = computed(() => {
-  if (!props.pickCreatesDocument || !props.pickCreatesAsRadio) return [];
+  if (!flat.value.pickCreatesDocument || resolvedAddType.value !== 'radio') return [];
   const items = effectiveItems.value;
   return Array.isArray(items) ? items : [];
 });
@@ -445,18 +476,23 @@ const pickRadioItems = computed(() => {
 const showPickRadioGroup = computed(
   () =>
     linkPersistEnabled.value &&
-    props.pickCreatesDocument &&
-    props.pickCreatesAsRadio &&
-    !isAddBlocked.value &&
+    flat.value.pickCreatesDocument &&
+    resolvedAddType.value === 'radio' &&
     pickRadioItems.value.length > 0,
 );
 
 const addFieldItems = computed(() => {
   const base = effectiveItems.value;
-  if (!props.showCreateNewOption) return base;
-  if (props.separateCreateButton) return base;
-  const titleKey = props.itemTitle;
-  const valueKey = props.itemValue;
+  if (!flat.value.showCreateNewOption) return base;
+  if (
+    showSeparateCreateButton.value &&
+    (resolvedAddType.value === 'select' || resolvedAddType.value === 'search')
+  ) {
+    return base;
+  }
+  if (resolvedAddType.value !== 'select' && resolvedAddType.value !== 'search') return base;
+  const titleKey = flat.value.itemTitle;
+  const valueKey = flat.value.itemValue;
   const createRow = {
     [titleKey]: 'Создать',
     [valueKey]: ADD_CREATE_NEW_VALUE,
@@ -466,8 +502,8 @@ const addFieldItems = computed(() => {
 
 /** Строка опции: сначала `itemTitle`, иначе типичные текстовые поля записи, иначе id */
 function pickerRow(record, id) {
-  const tk = props.itemTitle;
-  const vk = props.itemValue;
+  const tk = flat.value.itemTitle;
+  const vk = flat.value.itemValue;
   const raw = record && typeof record === 'object' ? record : {};
   const primary = raw[tk];
   if (primary != null && String(primary).trim() !== '') {
@@ -479,13 +515,13 @@ function pickerRow(record, id) {
 
 function idFromSearchRow(row) {
   if (!row || typeof row !== 'object') return '';
-  const vk = props.itemValue;
+  const vk = flat.value.itemValue;
   return String(row._id ?? row[vk] ?? '').trim();
 }
 
 function radioPickItemValue(item) {
   if (!item || typeof item !== 'object') return '';
-  const vk = props.itemValue;
+  const vk = flat.value.itemValue;
   const raw = item.raw !== undefined ? item.raw : item;
   const r = raw && typeof raw === 'object' ? raw : item;
   return String(r[vk] ?? r._id ?? '').trim();
@@ -493,7 +529,7 @@ function radioPickItemValue(item) {
 
 function radioPickItemTitle(item) {
   if (!item || typeof item !== 'object') return '';
-  const tk = props.itemTitle;
+  const tk = flat.value.itemTitle;
   const raw = item.raw !== undefined ? item.raw : item;
   const r = raw && typeof raw === 'object' ? raw : item;
   const t = r[tk];
@@ -512,7 +548,7 @@ async function runPickCreatesDocumentAdd(pickId) {
     return;
   }
 
-  const field = String(props.pickDocumentField || 'type').trim() || 'type';
+  const field = String(flat.value.pickDocumentField || 'type').trim() || 'type';
   const bucket = getEntityBucket();
   for (const key of selectedKeys.value) {
     const rec = bucket[String(key)];
@@ -533,7 +569,7 @@ async function runPickCreatesDocumentAdd(pickId) {
     addMenuOpen.value = false;
     search.value = '';
     radioPickValue.value = null;
-    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
+    if (addPlacementResolved.value !== 'inline') {
       addExpanded.value = false;
     }
   }
@@ -551,7 +587,7 @@ function getEntityBucket() {
 }
 
 function appendSelectedKeysToItems(items) {
-  const vk = props.itemValue;
+  const vk = flat.value.itemValue;
   const map = new Map();
   for (const item of items) {
     const raw = item?.raw ?? item;
@@ -576,7 +612,7 @@ async function syncRemoteSearchOptions(rawSearch = '') {
   const search = typeof rawSearch === 'string' ? rawSearch.trim() : '';
   const collection = entityStoreCollection.value;
 
-  if (!search) {
+  if (!search || search.length < 3) {
     if (collection === 'user') {
       const sid = String(globalStore.currentUserId || '').trim();
       const bucket = getEntityBucket();
@@ -588,7 +624,6 @@ async function syncRemoteSearchOptions(rawSearch = '') {
     }
     return;
   }
-  if (search.length < 3) return;
 
   if (!searchMethod) return;
   internalLoading.value = true;
@@ -619,13 +654,7 @@ watch(
   () => search.value,
   async (value) => {
     if (!effectiveRemoteSearch.value) return;
-    const s = (value || '').trim();
-    if (s.length === 0) {
-      await syncRemoteSearchOptions('');
-      return;
-    }
-    if (s.length < 3) return;
-    await syncRemoteSearchOptions(s);
+    await syncRemoteSearchOptions((value || '').trim());
   },
 );
 
@@ -657,15 +686,15 @@ watch(
 );
 
 onMounted(() => {
-  if (inlineAddPersist.value || inlinePickRadioPersist.value) {
+  if (addPlacementResolved.value === 'inline') {
     addExpanded.value = true;
   }
   if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
 });
 
 function isCreateNewMenuItem(item) {
-  if (!props.showCreateNewOption) return false;
-  const vk = props.itemValue;
+  if (!flat.value.showCreateNewOption) return false;
+  const vk = flat.value.itemValue;
   const raw = item?.raw;
   if (raw && typeof raw === 'object' && raw[vk] === ADD_CREATE_NEW_VALUE) {
     return true;
@@ -675,7 +704,7 @@ function isCreateNewMenuItem(item) {
 }
 
 watch(
-  () => props.contextKey,
+  () => flat.value.contextKey,
   () => {
     pendingCreateFromStore.value = false;
     if (pendingCreateResolve) {
@@ -686,7 +715,7 @@ watch(
     clearLinkAddError();
     addPickerValue.value = null;
     radioPickValue.value = null;
-    addExpanded.value = inlineAddPersist.value || inlinePickRadioPersist.value;
+    addExpanded.value = addPlacementResolved.value === 'inline';
     addMenuOpen.value = false;
     if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
   },
@@ -699,6 +728,16 @@ watch(showAddSlot, (open) => {
   }
 });
 
+watch(isAddBlocked, (blocked) => {
+  if (!blocked) return;
+  addMenuOpen.value = false;
+  addPickerValue.value = null;
+  radioPickValue.value = null;
+  if (addPlacementResolved.value !== 'inline') {
+    addExpanded.value = false;
+  }
+});
+
 function focusAddInput() {
   const refCmp = showSeparateCreateInput.value ? createInputRef.value : addFieldRef.value;
   const root = refCmp?.$el;
@@ -707,7 +746,6 @@ function focusAddInput() {
 }
 
 function openAddField() {
-  if (isAddBlocked.value) return;
   clearLinkAddError();
   addExpanded.value = true;
   addMenuOpen.value = false;
@@ -771,7 +809,7 @@ watch(removeConfirmOpen, (open) => {
 });
 
 function onAddSlotFocusOut(event) {
-  if (inlineAddPersist.value || inlinePickRadioPersist.value) return;
+  if (addPlacementResolved.value === 'inline') return;
   const related = event.relatedTarget;
   if (related && typeof related === 'object' && event.currentTarget.contains(related)) return;
   window.setTimeout(() => {
@@ -826,12 +864,12 @@ async function createLinkedDocument(document = {}) {
   try {
     pendingCreateFromStore.value = true;
     await callAddObject({
-      collection: props.collection,
+      collection: flat.value.collection,
       document: payload,
       link: {
         collection: linkParentCollection.value,
         _id: linkParentId.value,
-        linkField: props.linkField,
+        linkField: flat.value.linkField,
         linkPayload: {},
       },
     });
@@ -852,7 +890,7 @@ async function createLinkedDocument(document = {}) {
 }
 
 async function runCreateNewFromSearch() {
-  if (!props.showCreateNewOption) return;
+  if (!flat.value.showCreateNewOption) return;
   if (addingKey.value !== null) return;
   if (isAddBlocked.value) {
     reportLinkAddError(resolvedMaxSelectionMessage.value);
@@ -860,7 +898,7 @@ async function runCreateNewFromSearch() {
   }
   if (!linkPersistEnabled.value) {
     emit('createNew');
-    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
+    if (addPlacementResolved.value !== 'inline') {
       addExpanded.value = false;
     }
     addMenuOpen.value = false;
@@ -868,7 +906,7 @@ async function runCreateNewFromSearch() {
     return;
   }
 
-  const createField = String(props.createField || 'title').trim() || 'title';
+  const createField = String(flat.value.createField || 'title').trim() || 'title';
   const createValue = String(search.value || '').trim();
   if (!createValue) {
     return;
@@ -883,7 +921,7 @@ async function runCreateNewFromSearch() {
   } finally {
     addMenuOpen.value = false;
     search.value = '';
-    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
+    if (addPlacementResolved.value !== 'inline') {
       addExpanded.value = false;
     }
   }
@@ -903,7 +941,13 @@ async function onAddSelected(val) {
   }
   if (!linkPersistEnabled.value) return;
 
-  if (props.pickCreatesDocument) {
+  if (isAddBlocked.value) {
+    addPickerValue.value = null;
+    reportLinkAddError(resolvedMaxSelectionMessage.value);
+    return;
+  }
+
+  if (flat.value.pickCreatesDocument) {
     addPickerValue.value = null;
     await runPickCreatesDocumentAdd(id);
     return;
@@ -911,12 +955,6 @@ async function onAddSelected(val) {
 
   if (selectedKeys.value.some((k) => String(k) === id)) {
     addPickerValue.value = null;
-    return;
-  }
-
-  if (isAddBlocked.value) {
-    addPickerValue.value = null;
-    reportLinkAddError(resolvedMaxSelectionMessage.value);
     return;
   }
 
@@ -929,7 +967,7 @@ async function onAddSelected(val) {
     await callUpdateLink({
       _id,
       collection,
-      linkField: props.linkField,
+      linkField: flat.value.linkField,
       targetId: id,
       action: 'add',
       linkPayload: {},
@@ -945,7 +983,7 @@ async function onAddSelected(val) {
     addPickerValue.value = null;
     addMenuOpen.value = false;
     search.value = '';
-    if (!inlineAddPersist.value && !inlinePickRadioPersist.value) {
+    if (addPlacementResolved.value !== 'inline') {
       addExpanded.value = false;
     }
   }
@@ -954,8 +992,8 @@ async function onAddSelected(val) {
 async function removeTarget(key) {
   if (!linkPersistEnabled.value || removingKey.value !== null) return;
   const targetId = String(key);
-  if (props.minSelection > 0 && selectedKeys.value.length - 1 < props.minSelection) {
-    removeError.value = `Нужно оставить не меньше ${props.minSelection}`;
+  if (flat.value.minSelection > 0 && selectedKeys.value.length - 1 < flat.value.minSelection) {
+    removeError.value = `Нужно оставить не меньше ${flat.value.minSelection}`;
     emit('linkRemoveError', removeError.value);
     return;
   }
@@ -968,7 +1006,7 @@ async function removeTarget(key) {
     await callUpdateLink({
       _id,
       collection,
-      linkField: props.linkField,
+      linkField: flat.value.linkField,
       targetId,
       action: 'remove',
       taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
@@ -1097,7 +1135,7 @@ function onNonLinkSelectionUpdate(next) {
   flex: 0 0 auto;
   min-width: 0;
   max-width: none;
-  width: auto;
+  width: 100%;
 }
 
 .multi-entity-picker__add-slot--file-add {

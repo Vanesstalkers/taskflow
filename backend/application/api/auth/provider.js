@@ -44,7 +44,7 @@
   async registerUser(login, password) {
     const existing = await api.auth.provider.getUser(login);
     if (existing) {
-      throw new Error('User already exists');
+      throw new Error('User already exists', { code: 400 });
     }
     const now = new Date();
     const result = await db.mongodb.insertOne(api.auth.provider.usersCollection, {
@@ -61,12 +61,12 @@
   },
 
   async getUserByUserId(userId) {
-    let oid;
     try {
-      oid = new npm.mongodb.ObjectId(String(userId));
+      return db.mongodb.findOne(api.auth.provider.usersCollection, {
+        _id: new npm.mongodb.ObjectId(String(userId)),
+      });
     } catch {
       return null;
     }
-    return db.mongodb.findOne(api.auth.provider.usersCollection, { _id: oid });
   },
 });

@@ -7,8 +7,14 @@
     description: '',
     taskType: { lst: 'taskTypes' },
     status: '',
-    userLinks: { collection: 'user' },
-    docLinks: { collection: 'doc', schema: domain.collections.doc.schema() },
+    userLinks: {
+      collection: 'user',
+      schema: domain.collections.user.schema(),
+    },
+    docLinks: {
+      collection: 'doc',
+      schema: domain.collections.doc.schema(),
+    },
   },
 
   async move(id, direction) {

@@ -7,7 +7,7 @@
             <h1 class="text-h4 mb-1">{{ currentUserDisplay }}</h1>
             <p class="text-body-2 text-medium-emphasis">Статус backend: {{ status }}</p>
           </div>
-          <v-btn color="primary" prepend-icon="mdi-plus" @click="dialog = true"> Новая задача </v-btn>
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="createTaskDialogOpen = true"> Новая задача </v-btn>
         </div>
 
         <v-alert v-if="errorText" type="error" variant="tonal" class="mb-4">
@@ -51,71 +51,9 @@
         </v-row>
       </v-container>
 
-      <v-dialog v-model="dialog" max-width="560">
-        <v-card>
-          <v-card-title>Новая задача</v-card-title>
-          <v-card-text>
-            <v-text-field v-model="newTitle" label="Название" variant="outlined" class="mb-3" />
-            <v-textarea v-model="newDescription" label="Описание" variant="outlined" rows="3" />
-            <v-select
-              v-model="newTaskType"
-              label="Тип задачи"
-              variant="outlined"
-              class="mt-3"
-              :items="taskTypeOptions"
-              item-title="title"
-              item-value="value"
-              :disabled="creatingTask || taskTypeLoading"
-              :loading="taskTypeLoading"
-            />
-            <ComplexBlock
-              v-model="assigneeUserIds"
-              remote-search
-              collection="user"
-              picker-label="Исполнитель"
-              class="mt-3"
-              :disabled="creatingTask"
-            />
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="closeDialog">Отмена</v-btn>
-            <v-btn color="primary" :loading="creatingTask" @click="addTask">Создать</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <CreateTaskDialog v-model="createTaskDialogOpen" />
 
-      <v-dialog v-model="authDialog" max-width="460" persistent>
-        <v-card>
-          <v-card-title>Вход в систему</v-card-title>
-          <v-card-text>
-            <v-text-field
-              v-model="authLogin"
-              label="Логин"
-              variant="outlined"
-              class="mb-3"
-              :disabled="authLoading"
-              @keyup.enter="submitAuth"
-            />
-            <v-text-field
-              v-model="authPassword"
-              label="Пароль"
-              type="password"
-              variant="outlined"
-              :disabled="authLoading"
-              @keyup.enter="submitAuth"
-            />
-          </v-card-text>
-          <v-alert v-if="authError" type="error" variant="tonal" class="mb-3">
-            {{ authError }}
-          </v-alert>
-          <v-card-actions>
-            <v-btn variant="text" :disabled="authLoading" @click="submitRegister"> Зарегистрироваться </v-btn>
-            <v-spacer />
-            <v-btn color="primary" :loading="authLoading" @click="submitAuth">Войти</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <AuthDialog ref="authDialogRef" />
     </v-main>
 
     <v-navigation-drawer
@@ -134,9 +72,6 @@
         :can-move-left="canMoveLeft(selectedTask.status)"
         :can-move-right="canMoveRight(selectedTask.status)"
         :moving-task-id="movingTaskId"
-        v-model:description="editDescription"
-        v-model:assignee-user-ids="editAssigneeUserIds"
-        v-model:doc-ids="editDocIds"
         @close="closeTaskDetail"
         @move="(step) => moveTask(selectedTask._id, step)"
       />
@@ -145,10 +80,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { initBackend } from './api/backend.js';
+import { computed, onMounted, ref } from 'vue';
+import { initBackend } from './main.js';
 import { subscribeStoreUpdates } from './utils/storeActions.js';
-import ComplexBlock from './components/ComplexBlock.vue';
+import AuthDialog from './components/AuthDialog.vue';
+import CreateTaskDialog from './components/CreateTaskDialog.vue';
 import TaskForm from './components/TaskForm.vue';
 import { useStore } from './stores/store.js';
 
@@ -156,11 +92,8 @@ const globalStore = useStore();
 
 const status = ref('Инициализация...');
 const errorText = ref('');
-const dialog = ref(false);
-const newTitle = ref('');
-const newDescription = ref('');
-const newTaskType = ref('');
-/** Справочник с бэка: `{ id, title }` или `{ value, title }` → единый вид для v-select и подписей */
+const createTaskDialogOpen = ref(false);
+/** Справочник с бэка: `{ id, title }` или `{ value, title }` → подписи типов на доске и в TaskForm */
 const taskTypeOptions = computed(() => {
   const raw = globalStore.lst.taskTypes;
   if (!Array.isArray(raw)) return [];
@@ -171,22 +104,11 @@ const taskTypeOptions = computed(() => {
     }))
     .filter((o) => o.title && o.value);
 });
-const taskTypeLoading = computed(() => Boolean(globalStore.lstLoading.taskTypes));
-const assigneeUserIds = ref([]);
-const creatingTask = ref(false);
 const detailDrawer = ref(false);
 const selectedTaskId = ref('');
-const editDescription = ref('');
-const editAssigneeUserIds = ref([]);
-const editDocIds = ref([]);
 const movingTaskId = ref('');
-const authDialog = ref(false);
-const authLoading = ref(false);
-const authLogin = ref('');
-const authPassword = ref('');
-const authError = ref('');
+const authDialogRef = ref(null);
 let api = null;
-let authResolve = null;
 
 const columns = [
   { id: 'todo', title: 'To Do' },
@@ -216,10 +138,8 @@ const currentUserDisplay = computed(() => {
   return login;
 });
 const getTaskMoveMethod = () => api?.core?.taskMove;
-const getTasksListMethod = () => api?.core?.tasksList;
+const getUserTaskListMethod = () => api?.core?.getUserTaskList;
 const getTaskMethod = () => api?.core?.getTask;
-const getTaskCreateMethod = () => api?.core?.addObject;
-const getLstMethod = () => api?.core?.getLst;
 const selectedTask = computed(() => {
   const id = selectedTaskId.value;
   if (!id) return null;
@@ -257,27 +177,13 @@ const moveTask = async (id, step) => {
   }
 };
 
-const closeDialog = () => {
-  dialog.value = false;
-  newTitle.value = '';
-  newDescription.value = '';
-  newTaskType.value = '';
-  if (currentUserId.value) {
-    assigneeUserIds.value = [currentUserId.value];
-  }
-};
-
 const openTaskDetail = async (task) => {
   const rawId = task?._id;
   const id = rawId != null && rawId !== '' ? String(rawId).trim() : '';
   if (!id || id === 'undefined') return;
   selectedTaskId.value = id;
-  editDescription.value = task.description || '';
-  editDocIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
-  const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
-  editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
   detailDrawer.value = true;
-  // await loadLst();
+
   await loadTask(id);
 };
 
@@ -305,65 +211,12 @@ const loadTask = async (_id) => {
     }
     const patch = res?.store;
     if (!patch || typeof patch !== 'object') return;
-    globalStore.setData({
-      currentUserId: globalStore.currentUserId,
-      lst: res?.lst || {},
-      store: patch,
-    });
-    const task = globalStore.store.task[id];
-    if (!task) return;
-    editDescription.value = task.description || '';
-    editDocIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
-    const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
-    editAssigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];
+
+    globalStore.setData({ lst: res.lst || {}, store: patch });
+
+    if (!globalStore.store.task[id]) return;
   } catch (error) {
     errorText.value = error.message || 'Не удалось загрузить задачу';
-  }
-};
-
-const addTask = async () => {
-  if (!newTitle.value.trim()) {
-    errorText.value = 'Укажи название задачи';
-    return;
-  }
-  errorText.value = '';
-  const createTask = getTaskCreateMethod();
-  if (!createTask) {
-    errorText.value = 'API addObject недоступен';
-    return;
-  }
-
-  creatingTask.value = true;
-  try {
-    const selectedAssigneeIds = assigneeUserIds.value.map((value) => String(value)).filter(Boolean);
-    const userLinks = Object.fromEntries(selectedAssigneeIds.map((userId) => [userId, {}]));
-    await createTask({
-      collection: 'task',
-      document: {
-        title: newTitle.value.trim(),
-        description: newDescription.value.trim(),
-        taskType: newTaskType.value,
-        status: 'todo',
-        userLinks,
-      },
-    });
-    closeDialog();
-  } catch (error) {
-    errorText.value = `Ошибка создания задачи: ${error.message}`;
-  } finally {
-    creatingTask.value = false;
-  }
-};
-
-const loadLst = async () => {
-  const lstMethod = getLstMethod();
-  if (!lstMethod) return;
-  await Promise.all([
-    globalStore.fetchLst({ name: 'taskTypes', getLst: lstMethod }),
-    globalStore.fetchLst({ name: 'userRoles', getLst: lstMethod }),
-  ]);
-  if (taskTypeOptions.value.length > 0 && !taskTypeOptions.value.some((option) => option.value === newTaskType.value)) {
-    newTaskType.value = taskTypeOptions.value[0]?.value || '';
   }
 };
 
@@ -372,105 +225,17 @@ const tryRestoreSession = async () => {
   if (!token || !api?.auth?.restore) return false;
   try {
     const response = await api.auth.restore({ token });
-    if (response.status === 'logged') {
-      const user = response?.user;
-      if (user?.userId) {
-        const userId = String(user.userId);
-        globalStore.store.user[userId] = {
-          userId,
-          login: user.login || '',
-        };
-        globalStore.currentUserId = userId;
-      }
+    if (response?.status === 'logged') {
+      const { userId: _id, login } = response.user || {};
+
+      globalStore.currentUserId = _id;
+      globalStore.store.user[_id] = { _id, login };
+
       return true;
     }
-  } catch {
-    // Invalid token, signin required.
-  }
+  } catch {}
   localStorage.removeItem('metarhia.session.token');
   return false;
-};
-
-const waitForAuth = () =>
-  new Promise((resolve) => {
-    authResolve = resolve;
-    authDialog.value = true;
-  });
-
-const submitAuth = async () => {
-  if (!api?.auth?.signin) {
-    authError.value = 'API auth.signin недоступен';
-    return;
-  }
-  if (!authLogin.value.trim() || !authPassword.value) {
-    authError.value = 'Укажи логин и пароль';
-    return;
-  }
-  authLoading.value = true;
-  authError.value = '';
-  try {
-    const response = await api.auth.signin({
-      login: authLogin.value.trim(),
-      password: authPassword.value,
-    });
-    if (response?.token) {
-      const user = response?.user;
-      if (user?.userId) {
-        const userId = String(user.userId);
-        globalStore.store.user[userId] = { userId, login: user.login || '' };
-        globalStore.currentUserId = userId;
-      }
-      localStorage.setItem('metarhia.session.token', response.token);
-      authDialog.value = false;
-      authPassword.value = '';
-      if (authResolve) authResolve(true);
-      authResolve = null;
-      return;
-    }
-    authError.value = 'Не удалось выполнить вход';
-  } catch (error) {
-    authError.value = error.message || 'Ошибка авторизации';
-  } finally {
-    authLoading.value = false;
-  }
-};
-
-const submitRegister = async () => {
-  if (!api?.auth?.register) {
-    authError.value = 'API auth.register недоступен';
-    return;
-  }
-  if (!authLogin.value.trim() || !authPassword.value) {
-    authError.value = 'Укажи логин и пароль';
-    return;
-  }
-  authLoading.value = true;
-  authError.value = '';
-  try {
-    const response = await api.auth.register({
-      login: authLogin.value.trim(),
-      password: authPassword.value,
-    });
-    if (response?.token) {
-      const user = response?.user;
-      if (user?.userId) {
-        const userId = String(user.userId);
-        globalStore.store.user[userId] = { userId, login: user.login || '' };
-        globalStore.currentUserId = userId;
-      }
-      localStorage.setItem('metarhia.session.token', response.token);
-      authDialog.value = false;
-      authPassword.value = '';
-      if (authResolve) authResolve(true);
-      authResolve = null;
-      return;
-    }
-    authError.value = 'Не удалось выполнить регистрацию';
-  } catch (error) {
-    authError.value = error.message || 'Ошибка регистрации';
-  } finally {
-    authLoading.value = false;
-  }
 };
 
 onMounted(async () => {
@@ -480,52 +245,27 @@ onMounted(async () => {
     const restored = await tryRestoreSession();
     if (!restored) {
       status.value = 'Требуется авторизация';
-      await waitForAuth();
+      await authDialogRef.value?.openAndWait();
     }
     await subscribeStoreUpdates();
-    const tasksList = getTasksListMethod();
+    const tasksList = getUserTaskListMethod();
     if (!tasksList) throw new Error('API tasksList недоступен');
     const response = await tasksList();
+    
     globalStore.setData({
-      currentUserId: response.currentUserId || '',
       lst: response.lst,
       store: {
         task: response.tasks || [],
         user: response.users || [],
       },
     });
-    // await loadLst();
+
     status.value = 'Подключено';
   } catch (error) {
     status.value = 'Недоступен';
     errorText.value = `Не удалось подключиться к backend: ${error.message}`;
   }
 });
-
-watch(dialog, async (opened) => {
-  if (!opened) return;
-  if (
-    taskTypeOptions.value.length > 0 &&
-    (!newTaskType.value || !taskTypeOptions.value.some((o) => o.value === newTaskType.value))
-  ) {
-    newTaskType.value = taskTypeOptions.value[0].value;
-  }
-  if (currentUserId.value) {
-    assigneeUserIds.value = [currentUserId.value];
-  }
-});
-
-watch(
-  () => selectedTask.value?.docLinks,
-  (docLinks) => {
-    if (!detailDrawer.value || !selectedTaskId.value) return;
-    const next = Object.keys(docLinks || {}).filter(Boolean);
-    const prev = editDocIds.value;
-    if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) return;
-    editDocIds.value = next;
-  },
-  { deep: true },
-);
 </script>
 
 <style scoped>

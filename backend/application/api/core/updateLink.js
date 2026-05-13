@@ -80,7 +80,7 @@
           // TODO: restore projection
           // projection: {
           //   ...Object.fromEntries(schema?.[linkField]?.fields?.map((field) => [field, 1]) || []),
-          //   ...domain.collections.getHiddenFields(linkCollection),
+          //   ...domain.collections.utils.getHiddenFields({ collection: linkCollection, taskType }),
           // },
         },
       );

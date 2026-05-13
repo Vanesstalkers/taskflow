@@ -28,7 +28,7 @@ declare global {
       updatedAt: Date | null;
     }
 
-    function tasksList(): Promise<{ tasks: TaskDto[] }>;
+    function getUserTaskList(): Promise<{ tasks: TaskDto[]; users: UserDto[]; lst: Record<string, unknown[]> }>;
 
     function taskMove(params: {
       id: string;

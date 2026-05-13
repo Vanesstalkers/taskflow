@@ -1,4 +1,3 @@
-/** Все `*.vue` в этой папке (кроме подпапок) — компоненты вкладки «Основное»; имя файла PascalCase → taskType camelCase (AddUser.vue → addUser). */
 const modules = import.meta.glob('./*.vue', { eager: true });
 
 function pascalFileBaseToTaskType(base) {
@@ -15,9 +14,6 @@ for (const path of Object.keys(modules)) {
   if (mod?.default) byType[key] = mod.default;
 }
 
-/**
- * Компонент основной вкладки задачи по полю task.taskType (совпадает с id в domain/list/taskTypes).
- */
 export function resolveTaskTypeMainComponent(taskType) {
   return byType[taskType];
 }

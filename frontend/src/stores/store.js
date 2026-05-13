@@ -3,11 +3,9 @@ import { defineStore } from 'pinia';
 export const useStore = defineStore('store', {
   state: () => ({
     currentUserId: '',
-    /** Сырые `items` из `getLst({ name })`: ключ — имя справочника, значение — массив записей */
     lst: {},
-    /** Флаги загрузки по имени справочника */
     lstLoading: {},
-    store: { user: {}, task: {} }, // эти ключи используются до первого вызова setData
+    store: { user: {}, task: {} },
   }),
   actions: {
     setData({ store = {}, lst = {}, currentUserId = '' }) {
@@ -23,10 +21,6 @@ export const useStore = defineStore('store', {
       }
     },
 
-    /**
-     * Загрузить один справочник `lst` с бэкенда.
-     * @param {{ name: string, getLst: (params: { name: string }) => Promise<{ items?: unknown[] }> }} params
-     */
     async fetchLst({ name, getLst }) {
       const key = String(name || '').trim();
       if (!key || typeof getLst !== 'function') return false;
