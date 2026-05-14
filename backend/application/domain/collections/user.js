@@ -1,6 +1,6 @@
 ({
   searchFields: ['login'],
-  uniqueKey: ['login', 'password'],
+  uniqueKey: ['login'],
   schema: () => ({
     login: '',
     password: {
