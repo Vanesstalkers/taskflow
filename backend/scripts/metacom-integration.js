@@ -13,13 +13,16 @@
  *   TASKFLOW_PASSWORD — для signin обязателен вместе с LOGIN; без LOGIN — пароль нового
  *     пользователя (по умолчанию Itest!9same).
  *   TASKFLOW_TASK_TYPE — при режиме с LOGIN (по умолчанию createSubdivision)
+ *   TASKFLOW_LOG_TAIL_BYTES — сколько байт с конца каждого *.log читать (по умолчанию 262144)
+ *   TASKFLOW_LOG_ERROR_MAX_LINES — максимум строк [error] в отчёте (по умолчанию 80)
  *
  * Запуск:
  *   cd backend && set TASKFLOW_LOGIN=... && set TASKFLOW_PASSWORD=... &&
  *   npm run integration:metacom
  *
  * При ошибке в backend/log/ создаются last-integration-error.json и
- * last-integration-error.txt (stack, фаза, URL, сырое packet.error Metacom).
+ * last-integration-error.txt (stack, фаза, URL, сырое packet.error Metacom,
+ * плюс строки [error] из backend/log/*.log — см. collectBackendLogErrors).
  */
 
 const fs = require('node:fs');
@@ -29,6 +32,11 @@ const WebSocket = require('ws');
 const LOG_DIR = path.join(__dirname, '..', 'log');
 const LAST_ERR_JSON = path.join(LOG_DIR, 'last-integration-error.json');
 const LAST_ERR_TXT = path.join(LOG_DIR, 'last-integration-error.txt');
+
+/** Сколько байт с конца каждого *.log читать при поиске [error]. */
+const LOG_TAIL_BYTES = Number(process.env.TASKFLOW_LOG_TAIL_BYTES || 262_144);
+/** Максимум строк [error] в отчёте (после сортировки по времени). */
+const LOG_ERROR_MAX_LINES = Number(process.env.TASKFLOW_LOG_ERROR_MAX_LINES || 80);
 
 const CALL_TIMEOUT_MS = Number(process.env.TASKFLOW_CALL_TIMEOUT_MS || 120_000);
 const DEFAULT_WS = 'ws://127.0.0.1:8001/api';
@@ -268,6 +276,84 @@ function clearIntegrationLogArtifacts() {
   }
 }
 
+const LOG_LINE_TIME_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s/;
+
+function parseLogLineTimeMs(line) {
+  const m = String(line).match(LOG_LINE_TIME_RE);
+  if (!m) return null;
+  const t = new Date(m[1]).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function lineIsLogErrorLevel(line) {
+  return /\[\s*error\s*\]/i.test(line);
+}
+
+/**
+ * Ищет строки уровня [error] в backend/log/*.log (хвост каждого файла).
+ * При meta.since — оставляет строки не раньше (since − запас по времени), чтобы
+ * сопоставить с текущим прогоном интеграции.
+ *
+ * @param {{ logDir: string; sinceMs: number | null; tailBytes: number; maxLines: number }} p
+ */
+function collectBackendLogErrors(p) {
+  const { logDir, sinceMs, tailBytes, maxLines } = p;
+  let dirents;
+  try {
+    dirents = fs.readdirSync(logDir, { withFileTypes: true });
+  } catch {
+    return {
+      lines: [],
+      filesScanned: 0,
+      note: 'каталог log недоступен для чтения',
+    };
+  }
+  const logNames = dirents
+    .filter((d) => d.isFile() && d.name.endsWith('.log'))
+    .map((d) => d.name)
+    .sort();
+  const marginMs = 15_000;
+  const timeFloor = sinceMs !== null && sinceMs !== undefined ? sinceMs - marginMs : null;
+
+  const hits = [];
+  for (const name of logNames) {
+    const full = path.join(logDir, name);
+    let chunk;
+    try {
+      const st = fs.statSync(full);
+      if (!st.isFile() || st.size === 0) continue;
+      const start = Math.max(0, st.size - tailBytes);
+      const len = st.size - start;
+      const fd = fs.openSync(full, 'r');
+      try {
+        const buf = Buffer.alloc(len);
+        fs.readSync(fd, buf, 0, len, start);
+        chunk = buf.toString('utf8');
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      continue;
+    }
+    for (const line of chunk.split(/\r?\n/)) {
+      if (!line || !lineIsLogErrorLevel(line)) continue;
+      const t = parseLogLineTimeMs(line);
+      if (timeFloor !== null) {
+        if (t === null || t === undefined) continue;
+        if (t < timeFloor) continue;
+      }
+      hits.push({ file: name, text: line, t: t ?? 0 });
+    }
+  }
+  hits.sort((a, b) => a.t - b.t);
+  const slice = hits.slice(-maxLines);
+  return {
+    lines: slice.map(({ file, text }) => ({ file, text })),
+    filesScanned: logNames.length,
+    tailBytes,
+  };
+}
+
 /** Снимок ошибки для JSON (включая сырое тело Metacom). */
 function errorToPlain(err, depth = 0) {
   if (!err || depth > 8) return null;
@@ -296,10 +382,38 @@ function writeLastIntegrationFailure(err, meta) {
   } catch {
     return;
   }
+  const sinceMs =
+    meta.since !== null &&
+    meta.since !== undefined &&
+    String(meta.since).trim() !== ''
+      ? new Date(meta.since).getTime()
+      : null;
+  const logScan = collectBackendLogErrors({
+    logDir: LOG_DIR,
+    sinceMs: Number.isFinite(sinceMs) ? sinceMs : null,
+    tailBytes: LOG_TAIL_BYTES,
+    maxLines: LOG_ERROR_MAX_LINES,
+  });
+  let backendLogErrors;
+  if (logScan.lines.length > 0) {
+    backendLogErrors = {
+      filesScanned: logScan.filesScanned,
+      tailBytesPerFile: logScan.tailBytes,
+      lines: logScan.lines,
+    };
+  } else if (logScan.note) {
+    backendLogErrors = { note: logScan.note, filesScanned: logScan.filesScanned };
+  } else {
+    backendLogErrors = {
+      filesScanned: logScan.filesScanned,
+      note: 'строк [error] в хвосте *.log не найдено (см. TASKFLOW_LOG_TAIL_BYTES / поле since)',
+    };
+  }
   const payload = {
     ...meta,
     capturedAt: new Date().toISOString(),
     error: errorToPlain(err),
+    backendLogErrors,
   };
   let json;
   try {
@@ -313,10 +427,17 @@ function writeLastIntegrationFailure(err, meta) {
       errorStack: err?.stack,
     });
   }
+  const logSection =
+    logScan.lines.length > 0
+      ? logScan.lines.map(({ file, text }) => `[${file}] ${text}`).join('\n')
+      : String(logScan.note || 'нет совпадений [error] в хвосте backend/log/*.log');
   const txt = [
     `# capturedAt: ${payload.capturedAt}`,
     `# phase: ${meta.phase || ''}`,
     `# url: ${meta.url || ''}`,
+    '',
+    '##-- backend/log/*.log — строки [error] (хвост файлов) --##',
+    logSection,
     '',
     '##-- JSON (same as last-integration-error.json) --##',
     json,
@@ -614,6 +735,7 @@ async function main() {
   console.log(`Подключение: ${url}`);
 
   const ph = { phase: 'init' };
+  const integrationStartedAt = new Date().toISOString();
 
   try {
     ph.phase = 'ws.connect';
@@ -636,7 +758,7 @@ async function main() {
     clearIntegrationLogArtifacts();
     console.log('\nВсе проверки прошли успешно.');
   } catch (e) {
-    writeLastIntegrationFailure(e, { phase: ph.phase, url });
+    writeLastIntegrationFailure(e, { phase: ph.phase, url, since: integrationStartedAt });
     console.error('\nОшибка:', e?.message || e);
     const code = e && e.code;
     if (code !== undefined && code !== null) {

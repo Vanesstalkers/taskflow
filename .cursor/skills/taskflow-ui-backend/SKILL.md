@@ -7,7 +7,8 @@ description: >-
   registry), and checking domain/collections before introducing new entities. Use when
   adding forms, fields, task UI, new task types, collections, dictionaries, Metacom
   API usage, Pinia patches, or MongoDB persistence. New task types: must verify via
-  backend/scripts/metacom-integration.js (see skill body).
+  backend/scripts/metacom-integration.js (see skill body). Any nested `collection:` in
+  task schemas must have a matching `domain/collections/<name>.js` file on disk.
 ---
 
 # Taskflow: UI и бэкенд через готовые компоненты
@@ -26,6 +27,17 @@ description: >-
 2. Сверить с **`backend/application/domain/task.js`** (`defaultSchema`, связи) и с тем, как **`getTask`**, **`getUserTaskList`**, **`updateField`**, **`updateLink`**, **`ensureUniqueKeys`** опираются на **`domain.collections[collection]`** и **`domain.collections.task[taskType]`** — новая сущность не должна обходить эти контракты без необходимости.
 
 Цель: не плодить параллельные коллекции и не дублировать поля, если задача решается расширением существующей схемы или связью.
+
+### Почему недостаточно «просмотреть каталог» и интеграционного скрипта
+
+При типе задачи с вложенной связью (`created…Links`, `…List` и т.п.) в схеме почти всегда есть блок вида **`{ collection: 'имя', schema: domain.collections.имя.schema() }`**. Рантайм поднимает **`domain.collections.имя`** только из файла **`backend/application/domain/collections/имя.js`** (не из `collections/task/` и не из текста `metacom-integration.js`). Если этого файла нет, **`domain.collections.имя`** будет **`undefined`**, и первый же **`getUserTaskList` / `getTask`** упадёт с **`Cannot read properties of undefined (reading 'schema')`** — даже если задача уже создана в MongoDB.
+
+Типичный промах агента: добавили **`collections/task/createSubdivision.js`**, **`taskTypes`**, фронт и ветку в **`metacom-integration.js`** (там уже фигурирует `collection: 'subdivision'`), но **не добавили** **`collections/subdivision.js`**, потому что:
+
+1. Правило «проверь `collections/` перед новой сущностью» воспринимается как **поиск дубликата**, а не как **инвентаризация всех имён `collection` в новой схеме**.
+2. Наличие **`subdivision`** в скрипте интеграции **не гарантирует** наличие доменного модуля коллекции — скрипт только вызывает RPC с строкой имени коллекции.
+
+**Обязательно перед завершением задачи:** для **каждой** строки **`collection: '…'`** в новой или изменённой схеме (`collections/task/*.js`, `collections/*.js`, вложенные `schema`) убедиться, что существует файл **`backend/application/domain/collections/<то же имя>.js`** с **`schema()`** (и при необходимости **`searchFields`**, **`uniqueKey`**). Если файла нет — **создать** его по образцу **`user.js`**, **`pp.js`**, **`doc.js`** или расширить существующую коллекцию осознанно, а не оставлять «висячую» ссылку.
 
 ### Уточнение у пользователя при неоднозначности модели данных
 
@@ -137,6 +149,7 @@ description: >-
 |------|----------|
 | Справочник | Пункт с **`code`** в **`domain/lst/taskTypes.js`**. |
 | Схема | **`domain/collections/task/<тип>.js`** с **`schema()`** (и при необходимости **`uniqueKey`**). |
+| Коллекции по ссылке | Для **каждого** значения **`collection:`** во вложенных полях схемы — файл **`domain/collections/<имя>.js`** существует и экспортирует **`schema()`** (см. подраздел **«Почему недостаточно…»**). |
 | Создание | Тот же **`code`** в селекте (данные уже из `lst`). |
 | Детали | **`frontend/src/components/tasks/<PascalCase>.vue`** → тот же **`code`**, что в схеме и в `taskTypes` (см. **«Правила именования `taskType`»**). |
 | **Интеграционный прогон** | Обязательно: **`backend/scripts/metacom-integration.js`** (см. ниже). |
