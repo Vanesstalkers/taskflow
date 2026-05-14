@@ -6,7 +6,8 @@ description: >-
   reference data (lst), task creation rules (addObject, taskType schemas, TaskForm
   registry), and checking domain/collections before introducing new entities. Use when
   adding forms, fields, task UI, new task types, collections, dictionaries, Metacom
-  API usage, Pinia patches, or MongoDB persistence.
+  API usage, Pinia patches, or MongoDB persistence. New task types: must verify via
+  backend/scripts/metacom-integration.js (see skill body).
 ---
 
 # Taskflow: UI и бэкенд через готовые компоненты
@@ -25,6 +26,10 @@ description: >-
 2. Сверить с **`backend/application/domain/task.js`** (`defaultSchema`, связи) и с тем, как **`getTask`**, **`getUserTaskList`**, **`updateField`**, **`updateLink`**, **`ensureUniqueKeys`** опираются на **`domain.collections[collection]`** и **`domain.collections.task[taskType]`** — новая сущность не должна обходить эти контракты без необходимости.
 
 Цель: не плодить параллельные коллекции и не дублировать поля, если задача решается расширением существующей схемы или связью.
+
+### Уточнение у пользователя при неоднозначности модели данных
+
+Если после просмотра **`domain/collections/`**, **`domain/lst/`** и схем задач **`collections/task/`** остаётся **неоднозначность**, которую из кода не снять (типичные примеры: **новая коллекция MongoDB** vs **поля на документе `task`** vs **вложенная схема по `collection` + мапа** vs **только статический справочник `lst`** vs **расширение существующего `lst`**; нужна ли **запись в БД после согласования** или достаточно задачи как черновика; **одиночное значение** vs **список** и т.п.) — **сначала задать пользователю короткие уточняющие вопросы** с вариантами (2–4 пункта), **не выбирать молча «разумный по умолчанию»**, если выбор меняет контракт хранения, справочники или жизненный цикл данных. Реализацию начинать после ответа или при явном разрешении «делай минимальный вариант X».
 
 ## Где лежит общая логика RPC
 
@@ -96,13 +101,35 @@ description: >-
 
 - Базовые поля — **`domain/task.js`** → **`defaultSchema`**.
 - Для каждого **`taskType`** нужен модуль **`backend/application/domain/collections/task/<имя>.js`**, доступный как **`domain.collections.task[taskType]`**, с **`schema()`** (расширение через `...domain.task.defaultSchema`). Иначе ломаются **`getUserTaskList`**, **`getTask`**, **`updateField`**, **`updateLink`**, **`ensureUniqueKeys`**.
-- В **`domain/lst/taskTypes.js`** у каждого типа **`code`** должен совпадать с ключом **`domain.collections.task[code]`** и со значением **`document.taskType`** с фронта.
+- **Как подключается `domain.collections.task[code]` (отдельного реестра нет):** рантайм **Impress** строит объект **`domain`** из дерева каталога **`application/domain/`**: вложенные папки становятся вложенными свойствами (`collections` → `domain.collections`, подпапка `task` → **`domain.collections.task`**). Каждый файл **`collections/task/<code>.js`** попадает в этот объект под ключом **`<code>`** — это **имя файла без `.js`**, в **camelCase**, как в обычных именах модулей Node (пример: файл **`addUser.js`** → **`domain.collections.task.addUser`**). Достаточно положить новый файл в **`backend/application/domain/collections/task/`** и перезапустить приложение: отдельно регистрировать тип в каком-то списке на бэкенде не нужно.
+- В **`domain/lst/taskTypes.js`** у каждого типа **`code`** должен совпадать с ключом **`domain.collections.task[code]`** и со значением **`document.taskType`** с фронта (то есть с **именем файла** схемы без `.js`).
 - При необходимости в модуле типа задаётся **`uniqueKey: ['поле', ...]`**.
+
+### Правила именования `taskType` (один `code` на все слои)
+
+Один и тот же идентификатор **`code`** / **`taskType`** (строка в **camelCase**, обычно начинается с **строчной** буквы) должен совпадать везде:
+
+| Место | Правило |
+|--------|--------|
+| MongoDB, `addObject` | **`document.taskType`** = этот **`code`** |
+| Справочник | В **`domain/lst/taskTypes.js`** у пункта **`code`** |
+| Схема бэкенда | Имя файла **`backend/application/domain/collections/task/<code>.js`** (ключ **`domain.collections.task[code]`** = имя без `.js`) |
+| Форма задачи | Имя Vue-файла в **`frontend/src/components/tasks/`** задаёт **`code`** через реестр (см. ниже) |
+
+**Фронт (истина в коде — `frontend/src/components/tasks/registry.js`):** из имени файла без пути и без **`.vue`** берётся база в **PascalCase** (например `AddUser`, `RecruitmentRequest`, `CreateSubdivision`), затем **`taskType` = первая буква в нижнем регистре + остаток строки без изменений**: `base.charAt(0).toLowerCase() + base.slice(1)`.
+
+Примеры:
+
+- **`AddUser.vue`** → **`addUser`**
+- **`RecruitmentRequest.vue`** → **`recruitmentRequest`**
+- **`CreateSubdivision.vue`** → **`createSubdivision`**
+
+Важно: это **не** «перевести всю фразу в lowerCamelCase с нуля» и **не** `toLowerCase()` по всему имени файла — меняется **только первый символ** базового имени. Имя компонента должно быть **PascalCase** (с заглавной первой буквы), иначе совпадение с ожидаемым **`taskType`** собьётся.
 
 ### Фронтенд: детальная панель и типо-специфичный UI
 
-- **`TaskForm.vue`:** вкладка «Основное» — **`resolveTaskTypeMainComponent(task.taskType)`** из **`frontend/src/components/tasks/registry.js`**.
-- Соглашение: файл **`frontend/src/components/tasks/<PascalCase>.vue`** → **`taskType`** = имя с **первой буквой в нижнем регистре** (пример: **`AddUser.vue`** → **`addUser`**). Новый тип задачи = новый Vue-файл в **`tasks/`** по этому правилу + запись в **`taskTypes`**.
+- **`TaskForm.vue`:** вкладка «Основное» — **`resolveTaskTypeMainComponent(task.taskType)`** из **`frontend/src/components/tasks/registry.js`**; значение **`task.taskType`** должно совпадать с **`code`** по таблице выше.
+- Новый тип: Vue-файл в **`tasks/`** с именем по правилам предыдущего подраздела + пункт в **`taskTypes`** с тем же **`code`**.
 
 ### Чеклист нового типа задачи
 
@@ -111,4 +138,17 @@ description: >-
 | Справочник | Пункт с **`code`** в **`domain/lst/taskTypes.js`**. |
 | Схема | **`domain/collections/task/<тип>.js`** с **`schema()`** (и при необходимости **`uniqueKey`**). |
 | Создание | Тот же **`code`** в селекте (данные уже из `lst`). |
-| Детали | **`frontend/src/components/tasks/<Имя>.vue`** (PascalCase → тот же **`code`** по **`registry.js`**). |
+| Детали | **`frontend/src/components/tasks/<PascalCase>.vue`** → тот же **`code`**, что в схеме и в `taskTypes` (см. **«Правила именования `taskType`»**). |
+| **Интеграционный прогон** | Обязательно: **`backend/scripts/metacom-integration.js`** (см. ниже). |
+
+### Обязательное тестирование через `metacom-integration.js`
+
+После добавления или изменения **типа задачи** (`taskType`), связанной с ним **схемы** `collections/task/<code>.js` или **типо-специфичного** создания связей (как у `addUser` / `createSubdivision`) агент **обязан** прогнать интеграционный скрипт и убедиться, что сценарий проходит без ошибок.
+
+1. **Сервер** `node server` (backend) уже запущен, Metacom доступен (часто `ws://127.0.0.1:8001/api`, см. `frontend/vite.config.js`).
+2. Из каталога **`backend`**: **`npm run integration:metacom`**.
+   - **Без** переменных `TASKFLOW_LOGIN` / `TASKFLOW_PASSWORD`: скрипт делает **`auth.register`** нового пользователя и **посев всех** типов из `lst.taskTypes` с полезной нагрузкой для известных типов — новый **`code`** должен попасть в этот цикл; при необходимости **расширить** скрипт (ветка по `taskType` и связанные `addObject` / проверки в `assertSeedTaskIntegrity`), иначе новый тип не будет проверяться по данным.
+   - С `TASKFLOW_LOGIN` + `TASKFLOW_PASSWORD` — узкий сценарий для одного `TASKFLOW_TASK_TYPE` (регрессия под существующую учётку).
+3. При падении смотреть **`backend/log/last-integration-error.json`** и **`.txt`** (см. `.cursor/rules/taskflow-integration-log.mdc`).
+
+Без успешного прогона (или явного согласования пользователя пропустить шаг) изменения по новому типу задачи **не считать завершёнными**.

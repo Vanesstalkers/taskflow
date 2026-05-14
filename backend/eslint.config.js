@@ -35,4 +35,21 @@ module.exports = [
       },
     },
   },
+  {
+    files: ['scripts/**/*.js'],
+    rules: {
+      'max-len': ['error', { code: 120 }],
+    },
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        console: true,
+        process: true,
+        require: true,
+        module: true,
+        __dirname: true,
+        __filename: true,
+      },
+    },
+  },
 ];

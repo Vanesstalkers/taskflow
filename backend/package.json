@@ -47,6 +47,7 @@
     "dotest": "npm run lint && npm run types && node server.js",
     "prepush": "npm run lint && npm run types && npm run test",
     "types": "tsc -p tsconfig.json",
+    "integration:metacom": "node scripts/metacom-integration.js",
     "lint": "eslint . && prettier -c \"**/*.js\" \"**/*.json\" \"**/*.md\"",
     "fix": "eslint . --fix && prettier --write \"**/*.js\" \"**/*.json\" \"**/*.md\"",
     "db": "metasql c"
@@ -61,7 +62,8 @@
     "eslint": "^9.39.4",
     "eslint-config-metarhia": "^9.1.8",
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "ws": "^8.18.0"
   },
   "dependencies": {
     "impress": "^3.1.2",

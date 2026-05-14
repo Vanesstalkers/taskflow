@@ -1,0 +1,13 @@
+---
+description: Где искать сырую ошибку после integration:metacom (RPC Metacom)
+globs: backend/scripts/metacom-integration.js,backend/log/*
+---
+
+После падения `npm run integration:metacom` скрипт пишет в `backend/log/`:
+
+- `last-integration-error.json` — `phase`, `url`, `error.stack`, при RPC: `metacomErrorPayload` и полный `metacomCallbackPacket` (как в ответе WebSocket).
+- `last-integration-error.txt` — то же плюс стек, удобно для поиска по тексту.
+
+При отладке API сначала открой эти файлы инструментом Read (не только вывод терминала).
+
+Режимы скрипта: без `TASKFLOW_LOGIN` — `auth.register` нового пользователя и посев **всех** типов из `lst.taskTypes` с полезной нагрузкой; с `TASKFLOW_LOGIN` + `TASKFLOW_PASSWORD` — одиночный сценарий для `TASKFLOW_TASK_TYPE`.

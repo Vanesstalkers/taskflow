@@ -1,3 +1,5 @@
-﻿frontend/dist/
+frontend/dist/
 */node_modules/
 backend/uploads/
+backend/log/last-integration-error.json
+backend/log/last-integration-error.txt
