@@ -22,7 +22,6 @@ declare global {
     interface TaskDto {
       id: string;
       title: string;
-      description: string;
       status: 'todo' | 'inProgress' | 'done' | string;
       createdAt: Date | null;
       updatedAt: Date | null;

@@ -5,7 +5,7 @@
     lastName: '',
     middleName: '',
     birthDate: '',
-    gender: '',
+    gender: { lst: 'genders' },
     phoneList: {
       collection: 'phone',
       schema: domain.collections.phone.schema(),

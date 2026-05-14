@@ -1,7 +1,7 @@
 ({
   items: [
-    { id: 'mobile', title: 'Сотовый' },
-    { id: 'home', title: 'Домашний' },
-    { id: 'work', title: 'Рабочий' },
+    { code: 'mobile', title: 'Сотовый' },
+    { code: 'home', title: 'Домашний' },
+    { code: 'work', title: 'Рабочий' },
   ],
 });

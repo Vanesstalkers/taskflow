@@ -20,7 +20,6 @@
     const tasks = documents.map((document) => ({
       _id: String(document._id),
       title: document.title || '',
-      description: document.description || '',
       taskType: document.taskType,
       status: document.status || 'todo',
       userLinks: document.userLinks || {},

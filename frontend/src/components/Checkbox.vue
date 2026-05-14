@@ -1,16 +1,16 @@
 <template>
   <div
-    class="app-input-wrap"
+    class="app-checkbox-wrap"
     :class="{
-      'app-input-wrap--success': showSuccessOutline,
-      'app-input-wrap--error': showErrorOutline,
+      'app-checkbox-wrap--success': showSuccessOutline,
+      'app-checkbox-wrap--error': showErrorOutline,
     }"
   >
-    <v-text-field
-      v-model="text"
+    <v-checkbox
+      v-model="checked"
       v-bind="$attrs"
       :label="label"
-      variant="underlined"
+      density="comfortable"
       hide-details="auto"
       :disabled="disabled || saving"
       :loading="loading || saving"
@@ -18,8 +18,7 @@
       :persistent-hint="!saveError && !!String(hint || '').trim()"
       :error="!!saveError"
       :error-messages="saveError ? [saveError] : []"
-      @keydown="onKeydown"
-      @blur="onBlur"
+      @update:model-value="onCheckedUpdate"
     />
   </div>
 </template>
@@ -32,7 +31,7 @@ defineOptions({ inheritAttrs: false });
 
 const OUTLINE_FLASH_MS = 2000;
 
-const text = defineModel({ type: String, default: '' });
+const checked = defineModel({ type: Boolean, default: false });
 
 const props = defineProps({
   /** Идентификатор документа (не нужен при ephemeral) */
@@ -46,9 +45,9 @@ const props = defineProps({
   hint: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
-  /** Родитель обрабатывает ввод (blur / Enter): без saveField, событие `commit` */
+  /** Родитель обрабатывает переключение: без saveField, событие `commit` */
   ephemeral: { type: Boolean, default: false },
-  /** Внешний индикатор загрузки (например создание связанного документа) */
+  /** Внешний индикатор загрузки */
   loading: { type: Boolean, default: false },
 });
 
@@ -56,7 +55,7 @@ const emit = defineEmits(['commit']);
 
 const saving = ref(false);
 const saveError = ref('');
-const lastCommitted = ref('');
+const lastCommitted = ref(false);
 
 const showSuccessOutline = ref(false);
 const showErrorOutline = ref(false);
@@ -99,7 +98,7 @@ function flashError() {
 watch(
   () => props.contextKey,
   () => {
-    lastCommitted.value = String(text.value).trim();
+    lastCommitted.value = Boolean(checked.value);
     saveError.value = '';
     clearOutlineFlash();
   },
@@ -118,7 +117,7 @@ async function persist() {
     return;
   }
 
-  const next = String(text.value).trim();
+  const next = Boolean(checked.value);
   if (next === lastCommitted.value) return;
 
   if (!props._id) {
@@ -142,36 +141,26 @@ async function persist() {
   }
 }
 
-function onKeydown(event) {
-  if (props.disabled || saving.value) return;
-  if (props.ephemeral) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      void persist();
-    }
-    return;
-  }
-  if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
-  event.preventDefault();
-  persist();
-}
-
-function onBlur() {
-  if (props.disabled || saving.value) return;
-  persist();
+function onCheckedUpdate() {
+  void persist();
 }
 </script>
 
 <style scoped>
-.app-input-wrap--success :deep(.v-field--variant-outlined .v-field__outline) {
-  color: rgb(var(--v-theme-success)) !important;
-  --v-field-border-opacity: 1 !important;
-  transition: color 0.15s ease;
+.app-checkbox-wrap {
+  display: inline-flex;
+  max-width: 100%;
+  border-radius: 4px;
+  transition: outline-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.app-input-wrap--error :deep(.v-field--variant-outlined .v-field__outline) {
-  color: rgb(var(--v-theme-error)) !important;
-  --v-field-border-opacity: 1 !important;
-  transition: color 0.15s ease;
+.app-checkbox-wrap--success {
+  outline: 2px solid rgb(var(--v-theme-success));
+  outline-offset: 2px;
+}
+
+.app-checkbox-wrap--error {
+  outline: 2px solid rgb(var(--v-theme-error));
+  outline-offset: 2px;
 }
 </style>

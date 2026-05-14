@@ -68,39 +68,25 @@
           }"
           @focusout="onAddSlotFocusOut"
         >
-        <div
+        <Radio
           v-if="showPickRadioGroup"
-          class="multi-entity-picker__add multi-entity-picker__radio-pick d-flex flex-column ga-2 align-self-stretch"
-        >
-          <div v-if="String(flat.addFieldLabel || '').trim()" class="text-body-2 text-medium-emphasis">
-            {{ flat.addFieldLabel }}
-          </div>
-          <v-radio-group
-            :model-value="radioPickValue"
-            density="compact"
-            hide-details
-            class="multi-entity-picker__radio-group"
-            :disabled="flat.disabled || addingKey !== null || removingKey !== null"
-            @update:model-value="onRadioPickDocument"
-          >
-            <v-radio
-              v-for="(item, idx) in pickRadioItems"
-              :key="`pick-radio-${idx}-${radioPickItemValue(item)}`"
-              :label="radioPickItemTitle(item)"
-              :value="radioPickItemValue(item)"
-            />
-          </v-radio-group>
-        </div>
-        <v-autocomplete
+          :model-value="radioPickValue"
+          :field-label="flat.addFieldLabel"
+          :items="pickRadioItems"
+          :item-title="flat.itemTitle"
+          :item-value="flat.itemValue"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
+          @update:model-value="onRadioPickDocument"
+        />
+        <Select
           v-else-if="showSearchInput"
           ref="addFieldRef"
           :model-value="addPickerValue"
           v-model:search="search"
           v-model:menu="addMenuOpen"
-          class="multi-entity-picker__add"
-          variant="outlined"
-          density="compact"
-          single-line
+          picker-class="multi-entity-picker__add"
+          sync-menu
+          use-custom-item-row
           :items="addFieldItems"
           :loading="mergedLoading || addingKey !== null"
           :error="flat.error"
@@ -109,35 +95,24 @@
           :item-value="flat.itemValue"
           :label="flat.addFieldLabel"
           :placeholder="flat.addPlaceholder"
-          no-filter
-          clearable
-          hide-details="auto"
           :disabled="flat.disabled || addingKey !== null || removingKey !== null"
+          :show-create-new-option="flat.showCreateNewOption"
+          :create-new-sentinel="ADD_CREATE_NEW_VALUE"
           @update:model-value="onAddSelected"
-        >
-          <template #item="{ props: listItemProps, item }">
-            <v-list-item
-              v-bind="listItemProps"
-              :class="{ 'multi-entity-picker__item-create': isCreateNewMenuItem(item) }"
-            />
-          </template>
-        </v-autocomplete>
-        <v-text-field
+        />
+        <Input
           v-if="showSeparateCreateInput"
           ref="createInputRef"
           v-model="search"
+          ephemeral
+          :loading="addingKey === ADD_CREATE_NEW_VALUE"
           class="multi-entity-picker__add"
-          variant="outlined"
-          density="compact"
-          single-line
-          hide-details="auto"
           :label="flat.addFieldLabel"
           :placeholder="flat.addPlaceholder"
-          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
-          :loading="addingKey === ADD_CREATE_NEW_VALUE"
           autocomplete="off"
-          @keydown.enter.prevent="runCreateNewFromSearch"
-          @blur="runCreateNewFromSearch"
+          :disabled="flat.disabled || addingKey !== null || removingKey !== null"
+          :context-key="`${String(flat.contextKey || flat.parentId || '')}:separate-create-input`"
+          @commit="runCreateNew"
         />
         <v-btn
           v-else-if="showSeparateCreateButton"
@@ -147,7 +122,7 @@
           class="multi-entity-picker__create-btn flex-shrink-0 align-self-center"
           :disabled="flat.disabled || addingKey !== null || removingKey !== null"
           :loading="addingKey === ADD_CREATE_NEW_VALUE"
-          @click="runCreateNewFromSearch"
+          @click="runCreateNew"
         >
           {{ flat.createButtonLabel }}
         </v-btn>
@@ -173,13 +148,14 @@
 
     <p v-if="linkAddError" class="text-caption text-error mb-2">{{ linkAddError }}</p>
 
-    <v-autocomplete
+    <Select
       v-if="!linkPersistEnabled"
       :model-value="selectedKeys"
-      @update:model-value="onNonLinkSelectionUpdate"
       v-model:search="search"
-      variant="outlined"
+      multiple
       density="comfortable"
+      :single-line="false"
+      hide-selection-chips
       :items="effectiveItems"
       :loading="mergedLoading"
       :error="flat.error"
@@ -187,14 +163,9 @@
       :item-title="flat.itemTitle"
       :item-value="flat.itemValue"
       :label="flat.pickerLabel"
-      no-filter
-      multiple
-      clearable
-      hide-details="auto"
       :disabled="flat.disabled"
-    >
-      <template #selection />
-    </v-autocomplete>
+      @update:model-value="onNonLinkSelectionUpdate"
+    />
   </div>
 
   <teleport to="body">
@@ -241,7 +212,10 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { getApi } from '../main.js';
 import { addObject as callAddObject, updateLink as callUpdateLink } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
+import Input from './Input.vue';
 import InputFile from './InputFile.vue';
+import Radio from './Radio.vue';
+import Select from './Select.vue';
 
 const globalStore = useStore();
 
@@ -251,7 +225,7 @@ const search = defineModel('search', { type: String, default: '' });
 const props = defineProps({
   /** Связь и контекст: коллекция сущности, родитель, поле связи, ключ для сброса/фокуса */
   persist: { type: Object, default: () => ({}) },
-  /** Список и поля строки опции */
+  /** Список: `items`, поля строки; либо `lstName` — ключ в `store.lst` */
   list: { type: Object, default: () => ({}) },
   /** Подписи и сообщения: emptyText, pickerLabel, blockTitle, … */
   texts: { type: Object, default: () => ({}) },
@@ -260,7 +234,9 @@ const props = defineProps({
   /**
    * addType, addPlacement, minSelection, maxSelection, showCreateNewOption,
    * separateCreateButton (select/search — отдельная кнопка «Создать»; button+collapsed — один клик «+»),
-   * createButtonLabel, createField, pickCreatesDocument, pickDocumentField, addFileField, addFileLabel, addFileMultiple
+   * createButtonLabel, createField, pickCreatesDocument, pickDocumentField,
+   * allowDuplicatePickField (по умолчанию true при pickCreatesDocument; false — не давать повторять значение pickDocumentField, как для ролей),
+   * addFileField, addFileLabel, addFileMultiple
    */
   add: { type: Object, default: () => ({}) },
   ui: { type: Object, default: () => ({}) },
@@ -351,9 +327,10 @@ const flat = computed(() => {
     linkField: String(persist.linkField ?? '').trim(),
     contextKey: String(persist.contextKey ?? '').trim(),
 
-    items: Array.isArray(list.items) ? list.items : [],
+    listItemsRaw: Array.isArray(list.items) ? list.items : [],
+    listLstName: String(list.lstName ?? '').trim(),
     itemTitle: String(list.itemTitle ?? 'title'),
-    itemValue: String(list.itemValue ?? 'value'),
+    itemValue: String(list.itemValue ?? 'code'),
 
     emptyText: String(texts.emptyText ?? ''),
     blockTitle: String(texts.blockTitle ?? ''),
@@ -378,6 +355,8 @@ const flat = computed(() => {
     createField: String(add.createField ?? 'title'),
     pickCreatesDocument: Boolean(add.pickCreatesDocument),
     pickDocumentField: String(add.pickDocumentField ?? 'type'),
+    /** По умолчанию true: при pickCreatesDocument одно значение списка можно выбрать несколько раз. Для ролей и т.п. передайте false. */
+    allowDuplicatePickField: add.allowDuplicatePickField !== false,
     addFileField: String(add.addFileField ?? 'fileName'),
     addFileLabel: String(add.addFileLabel ?? 'Добавить файлы'),
     addFileMultiple: add.addFileMultiple !== false,
@@ -479,7 +458,16 @@ const canAddMoreLinks = computed(() => linkPersistEnabled.value && !isAddBlocked
 
 const mergedLoading = computed(() => flat.value.loading || internalLoading.value);
 
-const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : flat.value.items));
+const catalogItems = computed(() => {
+  const raw = flat.value.listItemsRaw;
+  if (Array.isArray(raw) && raw.length > 0) return raw;
+  const key = flat.value.listLstName;
+  if (!key) return [];
+  const arr = globalStore.lst[key];
+  return Array.isArray(arr) ? arr : [];
+});
+
+const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : catalogItems.value));
 
 const pickRadioItems = computed(() => {
   if (!flat.value.pickCreatesDocument || resolvedAddType.value !== 'radio') return [];
@@ -514,7 +502,7 @@ const addFieldItems = computed(() => {
   return [createRow, ...base];
 });
 
-/** Строка опции: сначала `itemTitle`, иначе типичные текстовые поля записи, иначе id */
+/** Строка опции: сначала `itemTitle`, иначе типичные текстовые поля записи, иначе `_id` / ключ значения */
 function pickerRow(record, id) {
   const tk = flat.value.itemTitle;
   const vk = flat.value.itemValue;
@@ -533,25 +521,6 @@ function idFromSearchRow(row) {
   return String(row._id ?? row[vk] ?? '').trim();
 }
 
-function radioPickItemValue(item) {
-  if (!item || typeof item !== 'object') return '';
-  const vk = flat.value.itemValue;
-  const raw = item.raw !== undefined ? item.raw : item;
-  const r = raw && typeof raw === 'object' ? raw : item;
-  return String(r[vk] ?? r._id ?? '').trim();
-}
-
-function radioPickItemTitle(item) {
-  if (!item || typeof item !== 'object') return '';
-  const tk = flat.value.itemTitle;
-  const raw = item.raw !== undefined ? item.raw : item;
-  const r = raw && typeof raw === 'object' ? raw : item;
-  const t = r[tk];
-  if (t != null && String(t).trim() !== '') return String(t);
-  const v = radioPickItemValue(item);
-  return v || String(item);
-}
-
 async function runPickCreatesDocumentAdd(pickId) {
   const id = String(pickId || '').trim();
   if (!id || !linkPersistEnabled.value) return;
@@ -563,13 +532,15 @@ async function runPickCreatesDocumentAdd(pickId) {
   }
 
   const field = String(flat.value.pickDocumentField || 'type').trim() || 'type';
-  const bucket = getEntityBucket();
-  for (const key of selectedKeys.value) {
-    const rec = bucket[String(key)];
-    if (rec && String(rec[field] ?? '') === id) {
-      reportLinkAddError('Этот пункт уже выбран');
-      radioPickValue.value = null;
-      return;
+  if (!flat.value.allowDuplicatePickField) {
+    const bucket = getEntityBucket();
+    for (const key of selectedKeys.value) {
+      const rec = bucket[String(key)];
+      if (rec && String(rec[field] ?? '') === id) {
+        reportLinkAddError('Этот пункт уже выбран');
+        radioPickValue.value = null;
+        return;
+      }
     }
   }
 
@@ -706,17 +677,6 @@ onMounted(() => {
   if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
 });
 
-function isCreateNewMenuItem(item) {
-  if (!flat.value.showCreateNewOption) return false;
-  const vk = flat.value.itemValue;
-  const raw = item?.raw;
-  if (raw && typeof raw === 'object' && raw[vk] === ADD_CREATE_NEW_VALUE) {
-    return true;
-  }
-  if (item?.value === ADD_CREATE_NEW_VALUE) return true;
-  return typeof item?.title === 'string' && item.title === 'Создать';
-}
-
 watch(
   () => flat.value.contextKey,
   () => {
@@ -754,6 +714,10 @@ watch(isAddBlocked, (blocked) => {
 
 function focusAddInput() {
   const refCmp = showSeparateCreateInput.value ? createInputRef.value : addFieldRef.value;
+  if (refCmp && typeof refCmp.focus === 'function') {
+    refCmp.focus();
+    return;
+  }
   const root = refCmp?.$el;
   const input = root?.querySelector?.('input:not([type=hidden])');
   input?.focus();
@@ -922,7 +886,7 @@ async function createLinkedDocument(document = {}) {
   }
 }
 
-async function runCreateNewFromSearch() {
+async function runCreateNew() {
   if (!flat.value.showCreateNewOption) return;
   if (addingKey.value !== null) return;
   if (isAddBlocked.value) {
@@ -975,7 +939,7 @@ async function onAddSelected(val) {
   const id = String(raw);
   if (id === ADD_CREATE_NEW_VALUE) {
     addPickerValue.value = null;
-    await runCreateNewFromSearch();
+    await runCreateNew();
     return;
   }
   if (!linkPersistEnabled.value) return;
@@ -1012,7 +976,6 @@ async function onAddSelected(val) {
       linkPayload: {},
       taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
     });
-    selectedKeys.value = [...selectedKeys.value, id];
     clearLinkAddError();
     emit('linkAdded', { targetId: id });
   } catch (error) {

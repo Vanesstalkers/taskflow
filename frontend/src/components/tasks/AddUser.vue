@@ -45,7 +45,7 @@
           <ComplexBlock
             v-if="_id"
             :model-value="userRoleListKeyList(_id)"
-            :list="{ items: userRoleItems, itemTitle: 'title', itemValue: 'id' }"
+            :list="{ lstName: 'userRoles' }"
             :persist="{
               collection: 'userRole',
               parentCollection: 'user',
@@ -53,7 +53,12 @@
               linkField: 'userRoleList',
               contextKey: _id,
             }"
-            :add="{ addType: 'select', pickCreatesDocument: true, showCreateNewOption: false }"
+            :add="{
+              addType: 'select',
+              pickCreatesDocument: true,
+              allowDuplicatePickField: false,
+              showCreateNewOption: false,
+            }"
             :texts="{
               blockTitle: 'Роли',
               emptyText: 'Роли не выбраны',
@@ -78,7 +83,7 @@
             :add="{ addType: 'button', separateCreateButton: true, maxSelection: 1, minSelection: 1 }"
             :texts="{
               blockTitle: 'Персональные данные',
-              emptyText: 'Записи не добавлены',
+              emptyText: 'Данные не добавлены',
             }"
           >
             <template #label="{ _id: ppId, record = {} }">
@@ -115,11 +120,21 @@
                   label="Дата рождения"
                   :context-key="ppId"
                 />
-                <Input v-model="record.gender" collection="pp" :_id="ppId" field="gender" label="Пол" :context-key="ppId" />
+                <Radio
+                  :model-value="record.gender"
+                  lst-name="genders"
+                  field-label="Пол"
+                  collection="pp"
+                  :_id="ppId"
+                  field="gender"
+                  pick-stored-as-empty="unspecified"
+                  empty-stored-value=""
+                  :context-key="`${ppId}:gender`"
+                />
                 <ComplexBlock
                   v-if="ppId"
                   :model-value="phoneListKeyList(ppId)"
-                  :list="{ items: phoneTypeItems, itemTitle: 'title', itemValue: 'id' }"
+                  :list="{ lstName: 'phoneTypes' }"
                   :persist="{
                     collection: 'phone',
                     parentCollection: 'pp',
@@ -144,7 +159,17 @@
                 >
                   <template #label="{ _id: phoneId, record: phoneRecord = {} }">
                     <div class="d-flex flex-column ga-2 align-self-stretch w-100">
-                      <span class="text-body-2 text-medium-emphasis">{{ phoneTypeLabel(phoneRecord.phoneType) }}</span>
+                      <Select
+                        :model-value="phoneRecord.phoneType || ''"
+                        lst-name="phoneTypes"
+                        label="Тип"
+                        density="comfortable"
+                        :single-line="false"
+                        collection="phone"
+                        :_id="phoneId"
+                        field="phoneType"
+                        :context-key="`${phoneId}:phoneType`"
+                      />
                       <Input
                         v-model="phoneRecord.number"
                         collection="phone"
@@ -152,6 +177,14 @@
                         field="number"
                         label="Номер"
                         :context-key="phoneId"
+                      />
+                      <Checkbox
+                        :model-value="Boolean(phoneRecord?.active)"
+                        label="Активный"
+                        :_id="phoneId"
+                        collection="phone"
+                        field="active"
+                        :context-key="`${phoneId}:active`"
                       />
                     </div>
                   </template>
@@ -170,48 +203,18 @@ import { computed, onMounted } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import InputFile from '../InputFile.vue';
-import { getApi } from '../../main.js';
+import Radio from '../Radio.vue';
+import Select from '../Select.vue';
 import { useStore } from '../../stores/store.js';
+import Checkbox from '../Checkbox.vue';
 
 const props = defineProps({
   task: { type: Object, required: true },
 });
 
-defineModel('description', { type: String, default: '' });
-
 const globalStore = useStore();
 
-const userRoleItems = computed(() => {
-  const items = globalStore.lst.userRoles;
-  return Array.isArray(items) ? items : [];
-});
-
-const phoneTypeItems = computed(() => {
-  const items = globalStore.lst.phoneTypes;
-  return Array.isArray(items) ? items : [];
-});
-
-const phoneTypeLabelById = computed(() => {
-  const m = new Map();
-  for (const item of phoneTypeItems.value) {
-    const id = item?.id != null && item.id !== '' ? String(item.id) : '';
-    if (!id) continue;
-    m.set(id, String(item?.title || id).trim() || id);
-  }
-  return m;
-});
-
-function phoneTypeLabel(typeId) {
-  const id = typeId != null && typeId !== '' ? String(typeId) : '';
-  if (!id) return '';
-  return phoneTypeLabelById.value.get(id) || id;
-}
-
-onMounted(async () => {
-  const getLst = getApi()?.core?.getLst;
-  if (typeof getLst !== 'function') return;
-  await globalStore.fetchLst({ name: 'phoneTypes', getLst });
-});
+onMounted(async () => {});
 
 function userRoleListKeyList(userId) {
   return Object.keys(globalStore.store.user?.[userId]?.userRoleList || {}).filter(Boolean);

@@ -14,24 +14,13 @@
             :maxlength="MAX_NEW_TITLE_LEN"
             counter
           />
-          <v-textarea
-            v-model="newDescription"
-            label="Описание"
-            variant="outlined"
-            rows="3"
-            :disabled="creatingTask"
-            :rules="newDescriptionRules"
-            :maxlength="MAX_NEW_DESCRIPTION_LEN"
-            counter
-          />
           <v-select
             v-model="newTaskType"
             label="Тип задачи"
             variant="outlined"
             class="mt-3"
             :items="taskTypeOptions"
-            item-title="title"
-            item-value="value"
+            item-value="code"
             :disabled="creatingTask || taskTypeLoading"
             :loading="taskTypeLoading"
             :rules="newTaskTypeRules"
@@ -73,7 +62,6 @@ const globalStore = useStore();
 const createTaskError = ref('');
 const createTaskFormRef = ref(null);
 const newTitle = ref('');
-const newDescription = ref('');
 const newTaskType = ref('');
 const assigneeUserIds = ref([]);
 const creatingTask = ref(false);
@@ -86,23 +74,18 @@ const taskTypeOptions = computed(() => {
   return raw
     .map((item) => ({
       title: String(item?.title || '').trim(),
-      value: String(item?.value ?? item?.id ?? '').trim(),
+      code: String(item?.code ?? item?.value ?? item?.id ?? '').trim(),
     }))
-    .filter((o) => o.title && o.value);
+    .filter((o) => o.title && o.code);
 });
 
 const taskTypeLoading = computed(() => Boolean(globalStore.lstLoading.taskTypes));
 
 const MAX_NEW_TITLE_LEN = 500;
-const MAX_NEW_DESCRIPTION_LEN = 8000;
 
 const newTitleRules = [
   (v) => (v != null && String(v).trim() !== '') || 'Укажи название задачи',
   (v) => String(v ?? '').trim().length <= MAX_NEW_TITLE_LEN || `Не более ${MAX_NEW_TITLE_LEN} символов`,
-];
-
-const newDescriptionRules = [
-  (v) => String(v ?? '').length <= MAX_NEW_DESCRIPTION_LEN || `Не более ${MAX_NEW_DESCRIPTION_LEN} символов`,
 ];
 
 const newTaskTypeRules = computed(() => {
@@ -113,7 +96,6 @@ const newTaskTypeRules = computed(() => {
 function resetFields() {
   createTaskError.value = '';
   newTitle.value = '';
-  newDescription.value = '';
   newTaskType.value = '';
   if (currentUserId.value) {
     assigneeUserIds.value = [currentUserId.value];
@@ -150,7 +132,6 @@ async function submit() {
       collection: 'task',
       document: {
         title: newTitle.value.trim(),
-        description: newDescription.value.trim(),
         taskType: newTaskType.value,
         status: 'todo',
         userLinks,
@@ -173,9 +154,9 @@ watch(open, async (isOpen) => {
   createTaskFormRef.value?.resetValidation();
   if (
     taskTypeOptions.value.length > 0 &&
-    (!newTaskType.value || !taskTypeOptions.value.some((o) => o.value === newTaskType.value))
+    (!newTaskType.value || !taskTypeOptions.value.some((o) => o.code === newTaskType.value))
   ) {
-    newTaskType.value = taskTypeOptions.value[0].value;
+    newTaskType.value = taskTypeOptions.value[0].code;
   }
   assigneeUserIds.value = currentUserId.value ? [currentUserId.value] : [];
 });

@@ -54,7 +54,7 @@
     </v-tabs>
     <div class="task-detail-window mb-2">
       <div v-show="panelActiveTab === 'main'">
-        <component :is="taskMainComponent" v-model:description="description" :task-id="taskId" :task="task" />
+        <component :is="taskMainComponent" :task-id="taskId" :task="task" />
       </div>
       <div v-show="panelActiveTab === 'assignees'">
         <ComplexBlock
@@ -144,7 +144,6 @@ import { useStore } from '../stores/store.js';
 /** Ошибки полей детальной панели (валидация / сеть). */
 const panelFieldErrors = reactive({
   title: '',
-  description: '',
   assignees: '',
   files: '',
 });
@@ -153,7 +152,6 @@ const panelActiveTab = ref('main');
 
 function clearPanelFieldErrors() {
   panelFieldErrors.title = '';
-  panelFieldErrors.description = '';
   panelFieldErrors.assignees = '';
   panelFieldErrors.files = '';
 }
@@ -161,7 +159,6 @@ function clearPanelFieldErrors() {
 const globalStore = useStore();
 const currentUserId = computed(() => String(globalStore.currentUserId || ''));
 
-const description = ref('');
 const assigneeUserIds = ref([]);
 const docIds = ref([]);
 
@@ -181,7 +178,6 @@ const taskMainComponent = computed(() => resolveTaskTypeMainComponent(props.task
 
 function syncFromTask(task) {
   if (!task) return;
-  description.value = task.description || '';
   docIds.value = Object.keys(task.docLinks || {}).filter(Boolean);
   const linkIds = Object.keys(task.userLinks || {}).filter(Boolean);
   assigneeUserIds.value = linkIds.length > 0 ? linkIds : currentUserId.value ? [currentUserId.value] : [];

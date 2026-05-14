@@ -33,7 +33,6 @@
                 >
                   <v-card-item class="task-card-main" @click="openTaskDetail(task)">
                     <v-card-title class="text-subtitle-1">{{ task.title }}</v-card-title>
-                    <v-card-subtitle>{{ task.description || 'Без описания' }}</v-card-subtitle>
                     <div class="mt-2" @click.stop>
                       <v-chip size="x-small" variant="tonal">
                         {{ taskTypeLabelByValue.get(String(task.taskType || '')) || task.taskType }}
@@ -93,16 +92,16 @@ const globalStore = useStore();
 const status = ref('Инициализация...');
 const errorText = ref('');
 const createTaskDialogOpen = ref(false);
-/** Справочник с бэка: `{ id, title }` или `{ value, title }` → подписи типов на доске и в TaskForm */
+/** Справочник с бэка: `{ code, title }` → подписи типов на доске и в TaskForm */
 const taskTypeOptions = computed(() => {
   const raw = globalStore.lst.taskTypes;
   if (!Array.isArray(raw)) return [];
   return raw
     .map((item) => ({
       title: String(item?.title || '').trim(),
-      value: String(item?.value ?? item?.id ?? '').trim(),
+      code: String(item?.code ?? item?.value ?? item?.id ?? '').trim(),
     }))
-    .filter((o) => o.title && o.value);
+    .filter((o) => o.title && o.code);
 });
 const detailDrawer = ref(false);
 const selectedTaskId = ref('');
@@ -149,7 +148,7 @@ const selectedTask = computed(() => {
 const taskTypeLabelByValue = computed(() => {
   const m = new Map();
   for (const option of taskTypeOptions.value) {
-    if (option.value) m.set(option.value, option.title);
+    if (option.code) m.set(option.code, option.title);
   }
   return m;
 });

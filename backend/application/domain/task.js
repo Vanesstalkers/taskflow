@@ -4,7 +4,6 @@
   defaultSchema: {
     _id: '',
     title: '',
-    description: '',
     taskType: { lst: 'taskTypes' },
     status: '',
     userLinks: {

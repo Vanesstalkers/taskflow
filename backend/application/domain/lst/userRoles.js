@@ -1,7 +1,7 @@
 ({
   items: [
-    { id: 'admin', title: 'Администратор' },
-    { id: 'dev', title: 'Разработчик' },
-    { id: 'guest', title: 'Гость' },
+    { code: 'admin', title: 'Администратор' },
+    { code: 'dev', title: 'Разработчик' },
+    { code: 'guest', title: 'Гость' },
   ],
 });
