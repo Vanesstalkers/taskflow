@@ -8,17 +8,30 @@
  *     (порт worker, как target в frontend/vite.config.js; :8000 часто даёт 302)
  *   TASKFLOW_CONNECT_TIMEOUT_MS — таймаут TCP/WS (по умолчанию 15000)
  *   TASKFLOW_CALL_TIMEOUT_MS — таймаут RPC (по умолчанию 120000)
- *   TASKFLOW_LOGIN — если задан: signin и одиночный сценарий (TASKFLOW_TASK_TYPE).
- *     Если не задан: register нового пользователя и посев всех типов из lst.taskTypes.
+ *   TASKFLOW_LOGIN — если задан: signin и одиночный сценарий по списку типов ниже.
+ *     Если не задан: register нового пользователя и посев по списку типов ниже.
  *   TASKFLOW_PASSWORD — для signin обязателен вместе с LOGIN; без LOGIN — пароль нового
  *     пользователя (по умолчанию Itest!9same).
- *   TASKFLOW_TASK_TYPE — при режиме с LOGIN (по умолчанию createSubdivision)
+ *   TASKFLOW_INTEGRATION_TASK_TYPES — какие taskType прогонять и каким сценарием посева.
+ *     Формат: «код[:сценарий]» через запятую. Сценарий: none | userChain | subdivisionLink
+ *     (none можно не писать: «foo» = только создание задачи без посева связанных сущностей).
+ *     Пример: createSubdivision:subdivisionLink,addUser:userChain
+ *     Если переменная не задана: в режиме register список строится из всех кодов lst.taskTypes
+ *     со сценарием none (добавление нового типа в справочник не требует правок скрипта).
+ *     Для посева userChain / subdivisionLink задайте переменную явно. В режиме LOGIN без
+ *     переменной используйте TASKFLOW_TASK_TYPE + TASKFLOW_INTEGRATION_SEED.
  *   TASKFLOW_LOG_TAIL_BYTES — сколько байт с конца каждого *.log читать (по умолчанию 262144)
  *   TASKFLOW_LOG_ERROR_MAX_LINES — максимум строк [error] в отчёте (по умолчанию 80)
  *
- * Запуск:
- *   cd backend && set TASKFLOW_LOGIN=... && set TASKFLOW_PASSWORD=... &&
+ * Запуск (из каталога backend, где лежит package.json со скриптом):
  *   npm run integration:metacom
+ *
+ *   С переменными окружения — bash/zsh:
+ *     cd backend && TASKFLOW_LOGIN=... TASKFLOW_PASSWORD=... npm run integration:metacom
+ *
+ *   Windows PowerShell (&& здесь не поддерживается):
+ *     Set-Location backend
+ *     $env:TASKFLOW_LOGIN='...'; $env:TASKFLOW_PASSWORD='...'; npm run integration:metacom
  *
  * При ошибке в backend/log/ создаются last-integration-error.json и
  * last-integration-error.txt (stack, фаза, URL, сырое packet.error Metacom,
@@ -41,10 +54,85 @@ const LOG_ERROR_MAX_LINES = Number(process.env.TASKFLOW_LOG_ERROR_MAX_LINES || 8
 const CALL_TIMEOUT_MS = Number(process.env.TASKFLOW_CALL_TIMEOUT_MS || 120_000);
 const DEFAULT_WS = 'ws://127.0.0.1:8001/api';
 
+/** Сценарии посева и проверок getTask (идентификаторы не привязаны к именам taskType в коде). */
+const SEED_KEYS = new Set(['none', 'userChain', 'subdivisionLink']);
+
 function env(name, fallback = '') {
   const v = process.env[name];
   if (v === undefined || v === null || String(v).trim() === '') return fallback;
   return String(v).trim();
+}
+
+/**
+ * @param {string} raw
+ * @param {Set<string> | null} validCodes — если задан, каждый code должен быть в справочнике
+ * @returns {{ code: string, seedKey: string }[]}
+ */
+function parseIntegrationTaskTypesSpec(raw, validCodes) {
+  const s = String(raw || '').trim();
+  if (!s) {
+    throw new Error(
+      'Укажите TASKFLOW_INTEGRATION_TASK_TYPES (формат: type[:seed], через запятую; ' +
+        'seed: none | userChain | subdivisionLink) или пару TASKFLOW_TASK_TYPE + TASKFLOW_INTEGRATION_SEED. ' +
+        'В режиме register без переменной список должен подставляться из lst.taskTypes (со сценарием none).',
+    );
+  }
+  const out = [];
+  for (const part of s.split(',')) {
+    const chunk = String(part || '').trim();
+    if (!chunk) continue;
+    const colon = chunk.indexOf(':');
+    let code;
+    let seedKey;
+    if (colon === -1) {
+      code = chunk;
+      seedKey = 'none';
+    } else {
+      code = chunk.slice(0, colon).trim();
+      seedKey = chunk.slice(colon + 1).trim() || 'none';
+    }
+    if (!code) continue;
+    if (!SEED_KEYS.has(seedKey)) {
+      throw new Error(
+        `Неизвестный сценарий посева «${seedKey}» для taskType «${code}». ` +
+          `Допустимо: ${[...SEED_KEYS].sort().join(', ')}.`,
+      );
+    }
+    if (validCodes && !validCodes.has(code)) {
+      throw new Error(
+        `TASKFLOW_INTEGRATION_TASK_TYPES: код «${code}» не найден в справочнике lst.taskTypes.`,
+      );
+    }
+    out.push({ code, seedKey });
+  }
+  if (out.length === 0) {
+    throw new Error('TASKFLOW_INTEGRATION_TASK_TYPES: после разбора не осталось ни одного типа задачи.');
+  }
+  return out;
+}
+
+/**
+ * @param {{ code?: string }[] | null | undefined} taskTypeItems — пункты lst.taskTypes
+ * @param {{ registerMode?: boolean }} [opts] — register: при пустой env подставить все коды из lst со сценарием none
+ */
+function resolveIntegrationTaskSpecs(taskTypeItems, opts = {}) {
+  const { registerMode = false } = opts;
+  let raw = env('TASKFLOW_INTEGRATION_TASK_TYPES');
+  if (!raw && registerMode) {
+    const codes = (taskTypeItems || []).map((e) => String(e?.code || '').trim()).filter(Boolean);
+    if (codes.length > 0) raw = codes.map((c) => `${c}:none`).join(',');
+  }
+  if (!raw) {
+    const legacyType = env('TASKFLOW_TASK_TYPE');
+    if (legacyType) {
+      const seed = env('TASKFLOW_INTEGRATION_SEED', 'none');
+      raw = `${legacyType}:${seed}`;
+    }
+  }
+  const codesFromLst = new Set(
+    (taskTypeItems || []).map((e) => String(e?.code || '').trim()).filter(Boolean),
+  );
+  return parseIntegrationTaskTypesSpec(raw, codesFromLst.size > 0 ? codesFromLst : null);
 }
 
 class MetacomError extends Error {
@@ -594,29 +682,42 @@ async function seedAddUserFull(client, ph, taskId, caches) {
   assertOk(phres, 'addObject(phone)');
 }
 
-async function assertSeedTaskIntegrity(client, ph, taskId, taskTypeCode) {
-  ph.phase = `getTask.assert.${taskTypeCode}`;
+async function runIntegrationSeed(client, ph, taskId, seedKey, caches) {
+  if (seedKey === 'none') return;
+  if (seedKey === 'subdivisionLink') {
+    await seedCreateSubdivision(client, ph, taskId);
+    return;
+  }
+  if (seedKey === 'userChain') {
+    await seedAddUserFull(client, ph, taskId, caches);
+    return;
+  }
+  assert(false, `неизвестный сценарий посева: ${seedKey}`);
+}
+
+async function assertSeedTaskIntegrity(client, ph, taskId, taskTypeCode, seedKey) {
+  ph.phase = `getTask.assert.${taskTypeCode}.${seedKey}`;
   const detail = await client.call('core', 'getTask', { _id: taskId });
   const t = detail?.store?.task?.[taskId];
   assert(t, 'getTask: нет задачи');
   assert(String(t.taskType) === taskTypeCode, 'getTask: неверный taskType');
-  if (taskTypeCode === 'createSubdivision') {
+  if (seedKey === 'subdivisionLink') {
     const ids = Object.keys(t.createdSubdivisionLinks || {}).filter(Boolean);
-    assert(ids.length > 0, 'createSubdivision: нет связей');
+    assert(ids.length > 0, 'subdivisionLink: нет связей createdSubdivisionLinks');
     const sub = detail.store.subdivision?.[ids[0]];
-    assert(sub && sub.name, 'createSubdivision: нет subdivision в store');
+    assert(sub && sub.name, 'subdivisionLink: нет subdivision в store');
   }
-  if (taskTypeCode === 'addUser') {
+  if (seedKey === 'userChain') {
     const uids = Object.keys(t.createdUserLinks || {}).filter(Boolean);
-    assert(uids.length > 0, 'addUser: нет createdUserLinks');
+    assert(uids.length > 0, 'userChain: нет createdUserLinks');
     const u = detail.store.user?.[uids[0]];
-    assert(u && u.login, 'addUser: нет user в store');
-    assert(Object.keys(u.userRoleList || {}).length > 0, 'addUser: нет ролей');
-    assert(Object.keys(u.ppList || {}).length > 0, 'addUser: нет pp');
+    assert(u && u.login, 'userChain: нет user в store');
+    assert(Object.keys(u.userRoleList || {}).length > 0, 'userChain: нет ролей');
+    assert(Object.keys(u.ppList || {}).length > 0, 'userChain: нет pp');
     const ppId = Object.keys(u.ppList).filter(Boolean)[0];
     const pp = detail.store.pp?.[ppId];
-    assert(pp && pp.firstName, 'addUser: нет pp в store');
-    assert(Object.keys(pp.phoneList || {}).length > 0, 'addUser: нет телефона у pp');
+    assert(pp && pp.firstName, 'userChain: нет pp в store');
+    assert(Object.keys(pp.phoneList || {}).length > 0, 'userChain: нет телефона у pp');
   }
 }
 
@@ -639,39 +740,48 @@ async function runRegisterAndSeedAllTaskTypes(client, ph) {
   const phoneTypes = await fetchLst(client, ph, 'phoneTypes');
   const caches = { userRoles, phoneTypes };
 
-  for (const entry of taskTypeItems) {
-    const code = String(entry?.code || '').trim();
-    if (!code) continue;
+  if (!env('TASKFLOW_INTEGRATION_TASK_TYPES')) {
+    console.log(
+      'TASKFLOW_INTEGRATION_TASK_TYPES не задана: прогоняются все типы из lst.taskTypes со сценарием none.',
+    );
+  }
+  const specs = resolveIntegrationTaskSpecs(taskTypeItems, { registerMode: true });
+  for (const { code, seedKey } of specs) {
     const { taskId } = await createOneTask(client, ph, userId, loginUsed, code);
-    if (code === 'createSubdivision') {
-      await seedCreateSubdivision(client, ph, taskId);
-    } else if (code === 'addUser') {
-      await seedAddUserFull(client, ph, taskId, caches);
-    }
-    await assertSeedTaskIntegrity(client, ph, taskId, code);
-    console.log(`Посев OK: тип=${code}, taskId=${taskId}`);
+    await runIntegrationSeed(client, ph, taskId, seedKey, caches);
+    await assertSeedTaskIntegrity(client, ph, taskId, code, seedKey);
+    console.log(`Посев OK: тип=${code}, seed=${seedKey}, taskId=${taskId}`);
   }
 
   ph.phase = 'getUserTaskList.afterSeed';
   const fin = await callGetUserTaskList(client);
   const needle = `[seed ${loginUsed}]`;
   const mine = (fin.tasks || []).filter((t) => String(t.title || '').includes(needle));
-  assert(mine.length >= taskTypeItems.length, `ожидалось не меньше ${taskTypeItems.length} задач с префиксом seed`);
+  assert(mine.length >= specs.length, `ожидалось не меньше ${specs.length} задач с префиксом seed`);
   console.log(`В списке пользователя задач с префиксом seed: ${mine.length}`);
 }
 
-async function runSigninSingleTaskScenario(client, ph, taskType, userId) {
+async function runSigninSingleTaskScenario(client, ph, userId) {
   ph.phase = 'getUserTaskList';
   const list = await callGetUserTaskList(client);
   assert(Array.isArray(list?.tasks), 'getUserTaskList: нет массива tasks');
   const taskTypes = list?.lst?.taskTypes;
   assert(Array.isArray(taskTypes), 'getUserTaskList: нет lst.taskTypes');
   warnTasksNotInTaskTypesLst(list, taskTypes);
+
+  const specs = resolveIntegrationTaskSpecs(taskTypes, { registerMode: false });
+  assert(
+    specs.length === 1,
+    `В режиме LOGIN ожидается ровно одна позиция в TASKFLOW_INTEGRATION_TASK_TYPES ` +
+      `(или пара TASKFLOW_TASK_TYPE + TASKFLOW_INTEGRATION_SEED), сейчас: ${specs.length}.`,
+  );
+  const { code: taskType, seedKey } = specs[0];
+
   const hasType = taskTypes.some((t) => String(t?.code) === taskType);
   const msgNoType = `getUserTaskList: в справочнике нет taskType «${taskType}»`;
   assert(hasType, msgNoType);
   const n = list.tasks.length;
-  console.log(`getUserTaskList: ok, задач: ${n}, тип «${taskType}» в справочнике`);
+  console.log(`getUserTaskList: ok, задач: ${n}, тип «${taskType}», сценарий «${seedKey}»`);
 
   const title = `[integration] ${taskType} ${new Date().toISOString()}`;
   ph.phase = 'addObject.task';
@@ -701,25 +811,20 @@ async function runSigninSingleTaskScenario(client, ph, taskType, userId) {
   assert(String(taskDoc.taskType) === taskType, 'getTask: неверный taskType');
   console.log('getTask: ok');
 
-  if (taskType === 'createSubdivision') {
-    await seedCreateSubdivision(client, ph, taskId);
-    const msgLink = 'addObject(subdivision + createdSubdivisionLinks): ok';
-    console.log(msgLink);
-  } else if (taskType === 'addUser') {
-    const userRoles = await fetchLst(client, ph, 'userRoles');
-    const phoneTypes = await fetchLst(client, ph, 'phoneTypes');
-    await seedAddUserFull(client, ph, taskId, { userRoles, phoneTypes });
-    console.log('addUser: связанный user + роль + pp + phone');
+  const userRoles = await fetchLst(client, ph, 'userRoles');
+  const phoneTypes = await fetchLst(client, ph, 'phoneTypes');
+  await runIntegrationSeed(client, ph, taskId, seedKey, { userRoles, phoneTypes });
+  if (seedKey !== 'none') {
+    console.log(`Посев «${seedKey}» для типа «${taskType}»: ok`);
   }
 
-  await assertSeedTaskIntegrity(client, ph, taskId, taskType);
+  await assertSeedTaskIntegrity(client, ph, taskId, taskType, seedKey);
 }
 
 async function main() {
   const url = env('TASKFLOW_METACOM_URL', DEFAULT_WS);
   const loginEnv = env('TASKFLOW_LOGIN');
   const passwordEnv = env('TASKFLOW_PASSWORD');
-  const taskType = env('TASKFLOW_TASK_TYPE', 'createSubdivision');
   const connectTimeout = Number(env('TASKFLOW_CONNECT_TIMEOUT_MS', '15000'));
 
   if (loginEnv && !passwordEnv) {
@@ -750,7 +855,7 @@ async function main() {
       assert(logged, 'signin: нет status=logged или user.userId');
       const userId = String(signin.user.userId);
       console.log(`Вход: ok, userId=${userId} (${loginEnv})`);
-      await runSigninSingleTaskScenario(client, ph, taskType, userId);
+      await runSigninSingleTaskScenario(client, ph, userId);
     } else {
       await runRegisterAndSeedAllTaskTypes(client, ph);
     }

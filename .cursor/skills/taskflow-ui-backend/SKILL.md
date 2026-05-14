@@ -7,7 +7,8 @@ description: >-
   registry), and checking domain/collections before introducing new entities. Use when
   adding forms, fields, task UI, new task types, collections, dictionaries, Metacom
   API usage, Pinia patches, or MongoDB persistence. New task types: must verify via
-  backend/scripts/metacom-integration.js (see skill body). Any nested `collection:` in
+  backend/scripts/metacom-integration.js (see skill body). Confirm new/changed files
+  exist on disk (list/glob), not only Read/git status, before finishing. Any nested `collection:` in
   task schemas must have a matching `domain/collections/<name>.js` file on disk.
 ---
 
@@ -38,6 +39,17 @@ description: >-
 2. Наличие **`subdivision`** в скрипте интеграции **не гарантирует** наличие доменного модуля коллекции — скрипт только вызывает RPC с строкой имени коллекции.
 
 **Обязательно перед завершением задачи:** для **каждой** строки **`collection: '…'`** в новой или изменённой схеме (`collections/task/*.js`, `collections/*.js`, вложенные `schema`) убедиться, что существует файл **`backend/application/domain/collections/<то же имя>.js`** с **`schema()`** (и при необходимости **`searchFields`**, **`uniqueKey`**). Если файла нет — **создать** его по образцу **`user.js`**, **`pp.js`**, **`doc.js`** или расширить существующую коллекцию осознанно, а не оставлять «висячую» ссылку.
+
+### Не полагаться только на `Read` и `git status` для «уже созданных» файлов
+
+Успешный **`Read`** пути и строка **`??` в `git status`** **не доказывают**, что файл реально лежит на диске в рабочей копии: возможны несохранённый буфер редактора, другой корень workspace, устаревший статус, рассинхрон с тем, откуда читает запущенный **`node server`**.
+
+**Обязательно** при добавлении нового типа задачи и связанных коллекций **до** объявления шага завершённым:
+
+1. **Проверить фактическое наличие** ожидаемых путей инструментом, который смотрит на ФС (например листинг каталога **`collections/`**, **`collections/task/`**, **`frontend/src/components/tasks/`**, или поиск по маске), а не только «прочитать путь и надеяться».
+2. Если какого‑то файла из чеклиста типа задачи нет — **создать** его в этом же заходе, а не править один слой (например только **`taskTypes.js`**) под предположение, что остальное уже сделано.
+
+Иначе интеграция или **`addObject(task)`** дадут **`500`** / **`undefined` у схемы**, хотя по ощущению «всё уже было в проекте».
 
 ### Уточнение у пользователя при неоднозначности модели данных
 
@@ -147,6 +159,7 @@ description: >-
 
 | Слой | Действие |
 |------|----------|
+| Файлы на диске | Все пути из чеклиста **существуют в рабочей копии** (см. **«Не полагаться только на `Read` и `git status`»**). |
 | Справочник | Пункт с **`code`** в **`domain/lst/taskTypes.js`**. |
 | Схема | **`domain/collections/task/<тип>.js`** с **`schema()`** (и при необходимости **`uniqueKey`**). |
 | Коллекции по ссылке | Для **каждого** значения **`collection:`** во вложенных полях схемы — файл **`domain/collections/<имя>.js`** существует и экспортирует **`schema()`** (см. подраздел **«Почему недостаточно…»**). |
@@ -159,7 +172,7 @@ description: >-
 После добавления или изменения **типа задачи** (`taskType`), связанной с ним **схемы** `collections/task/<code>.js` или **типо-специфичного** создания связей (как у `addUser` / `createSubdivision`) агент **обязан** прогнать интеграционный скрипт и убедиться, что сценарий проходит без ошибок.
 
 1. **Сервер** `node server` (backend) уже запущен, Metacom доступен (часто `ws://127.0.0.1:8001/api`, см. `frontend/vite.config.js`).
-2. Из каталога **`backend`**: **`npm run integration:metacom`**.
+2. Из каталога **`backend`**: **`npm run integration:metacom`**. При вызове из shell агента учитывать ОС: в **Windows PowerShell** цепочка **`cd … && npm run …`** даёт синтаксическую ошибку — использовать **`Set-Location <путь-к-backend>; npm run integration:metacom`** (или два отдельных шага). В **bash** допустимо **`cd … && npm run integration:metacom`**.
    - **Без** переменных `TASKFLOW_LOGIN` / `TASKFLOW_PASSWORD`: скрипт делает **`auth.register`** нового пользователя и **посев всех** типов из `lst.taskTypes` с полезной нагрузкой для известных типов — новый **`code`** должен попасть в этот цикл; при необходимости **расширить** скрипт (ветка по `taskType` и связанные `addObject` / проверки в `assertSeedTaskIntegrity`), иначе новый тип не будет проверяться по данным.
    - С `TASKFLOW_LOGIN` + `TASKFLOW_PASSWORD` — узкий сценарий для одного `TASKFLOW_TASK_TYPE` (регрессия под существующую учётку).
 3. При падении смотреть **`backend/log/last-integration-error.json`** и **`.txt`** (см. `.cursor/rules/taskflow-integration-log.mdc`).
