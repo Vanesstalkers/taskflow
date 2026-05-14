@@ -12,9 +12,12 @@
 
     const mapDocumentsToItems = (documents) =>
       documents.map((document) => {
-        const row = { _id: String(document._id) };
-        for (const field of searchFields) row[field] = document[field] ?? '';
-        return row;
+        const code = String(document._id);
+        const parts = searchFields
+          .map((field) => document[field])
+          .filter((v) => v !== null && String(v).trim() !== '');
+        const title = parts.length > 0 ? parts.map((v) => String(v).trim()).join(' · ') : code;
+        return { code, title };
       });
 
     const query = {
