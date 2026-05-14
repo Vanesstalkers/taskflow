@@ -70,12 +70,11 @@
             emptyText: 'Исполнители не выбраны',
             addPlaceholder: 'Поиск по имени или логину (от 3 символов)',
           }"
-          :add="{ addType: 'search', showCreateNewOption: false }"
+          :add="{ addType: 'search', showCreateNewOption: false, minSelection: 1 }"
           :status="{
             error: !!panelFieldErrors.assignees,
             errorMessages: panelFieldErrors.assignees ? [panelFieldErrors.assignees] : [],
           }"
-          :selection="{ minSelection: 1 }"
           @link-remove-error="panelFieldErrors.assignees = $event"
           @link-removed="panelFieldErrors.assignees = ''"
           @link-add-error="panelFieldErrors.assignees = $event"

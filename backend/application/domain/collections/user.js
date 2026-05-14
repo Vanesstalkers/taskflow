@@ -11,5 +11,9 @@
       collection: 'userRole',
       schema: domain.collections.userRole.schema(),
     },
+    ppList: {
+      collection: 'pp',
+      schema: domain.collections.pp.schema(),
+    },
   }),
 });

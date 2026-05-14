@@ -1,5 +1,11 @@
 <template>
   <div class="multi-entity-picker">
+    <div
+      v-if="showBlockTitle"
+      class="multi-entity-picker__block-title text-subtitle-2 text-high-emphasis mb-2"
+    >
+      {{ blockTitleDisplay }}
+    </div>
     <div class="multi-entity-picker__labels d-flex flex-wrap ga-2 align-center mb-3">
       <span v-if="selectedKeys.length === 0" class="text-body-2 text-medium-emphasis align-self-center">
         {{ flat.emptyText }}
@@ -20,7 +26,7 @@
           </slot>
         </span>
         <v-btn
-          v-if="linkPersistEnabled"
+          v-if="linkPersistEnabled && !isRemoveBlocked"
           type="button"
           icon="mdi-close"
           variant="text"
@@ -28,7 +34,7 @@
           size="x-small"
           color="medium-emphasis"
           class="multi-entity-picker__remove"
-          :disabled="flat.disabled || removingKey !== null || addingKey !== null || isRemoveBlocked"
+          :disabled="flat.disabled || removingKey !== null || addingKey !== null"
           :loading="removingKey === String(key)"
           @click.stop="requestRemove(key, $event)"
         />
@@ -247,18 +253,16 @@ const props = defineProps({
   persist: { type: Object, default: () => ({}) },
   /** Список и поля строки опции */
   list: { type: Object, default: () => ({}) },
-  /** Подписи и сообщения */
+  /** Подписи и сообщения: emptyText, pickerLabel, blockTitle, … */
   texts: { type: Object, default: () => ({}) },
-  /** minSelection, maxSelection, maxSelectionMessage */
-  selection: { type: Object, default: () => ({}) },
   /** loading, error, errorMessages */
   status: { type: Object, default: () => ({}) },
   /**
-   * addType, addPlacement, showCreateNewOption, separateCreateButton, createButtonLabel, createField,
-   * pickCreatesDocument, pickDocumentField, addFileField, addFileLabel, addFileMultiple
+   * addType, addPlacement, minSelection, maxSelection, showCreateNewOption,
+   * separateCreateButton (select/search — отдельная кнопка «Создать»; button+collapsed — один клик «+»),
+   * createButtonLabel, createField, pickCreatesDocument, pickDocumentField, addFileField, addFileLabel, addFileMultiple
    */
   add: { type: Object, default: () => ({}) },
-  /** disabled, fullWidthLabels */
   ui: { type: Object, default: () => ({}) },
 });
 
@@ -333,13 +337,12 @@ const flat = computed(() => {
   const persist = obj(props.persist);
   const list = obj(props.list);
   const texts = obj(props.texts);
-  const selection = obj(props.selection);
   const status = obj(props.status);
   const add = obj(props.add);
   const ui = obj(props.ui);
 
-  const minSel = Number(selection.minSelection ?? 0);
-  const maxSel = Number(selection.maxSelection ?? 0);
+  const minSel = Number(add.minSelection ?? 0);
+  const maxSel = Number(add.maxSelection ?? 0);
 
   return {
     collection: String(persist.collection ?? '').trim(),
@@ -353,6 +356,7 @@ const flat = computed(() => {
     itemValue: String(list.itemValue ?? 'value'),
 
     emptyText: String(texts.emptyText ?? ''),
+    blockTitle: String(texts.blockTitle ?? ''),
     pickerLabel: String(texts.pickerLabel ?? 'Выбрать из списка'),
     addFieldLabel: String(texts.addFieldLabel ?? ''),
     addPlaceholder: String(texts.addPlaceholder ?? 'Минимум 3 символа для поиска'),
@@ -379,9 +383,12 @@ const flat = computed(() => {
     addFileMultiple: add.addFileMultiple !== false,
 
     disabled: Boolean(ui.disabled),
-    fullWidthLabels: Boolean(ui.fullWidthLabels),
+    fullWidthLabels: Boolean(ui.fullWidthLabels ?? true),
   };
 });
+
+const blockTitleDisplay = computed(() => String(flat.value.blockTitle || '').trim());
+const showBlockTitle = computed(() => blockTitleDisplay.value.length > 0);
 
 const linkParentCollection = computed(() => flat.value.parentCollection);
 const linkParentId = computed(() => flat.value.parentId);
@@ -432,6 +439,13 @@ const showSeparateCreateInput = computed(
 /** Полоска добавления видна сразу или после «+». */
 const showAddSlot = computed(() => {
   if (!linkPersistEnabled.value) return false;
+  if (
+    addPlacementResolved.value === 'collapsed' &&
+    resolvedAddType.value === 'button' &&
+    flat.value.separateCreateButton
+  ) {
+    return false;
+  }
   if (addPlacementResolved.value === 'inline') return true;
   return addExpanded.value;
 });
@@ -745,8 +759,27 @@ function focusAddInput() {
   input?.focus();
 }
 
-function openAddField() {
+async function openAddField() {
   clearLinkAddError();
+  if (
+    flat.value.separateCreateButton &&
+    resolvedAddType.value === 'button' &&
+    addPlacementResolved.value === 'collapsed' &&
+    linkPersistEnabled.value &&
+    !flat.value.disabled
+  ) {
+    if (addingKey.value !== null || removingKey.value !== null) return;
+    if (isAddBlocked.value) {
+      reportLinkAddError(resolvedMaxSelectionMessage.value);
+      return;
+    }
+    try {
+      await createLinkedDocument({});
+    } catch {
+      // ошибка уже в reportLinkAddError
+    }
+    return;
+  }
   addExpanded.value = true;
   addMenuOpen.value = false;
   nextTick(() => {
@@ -908,10 +941,16 @@ async function runCreateNewFromSearch() {
 
   const createField = String(flat.value.createField || 'title').trim() || 'title';
   const createValue = String(search.value || '').trim();
+  let document;
   if (!createValue) {
-    return;
+    if (resolvedAddType.value === 'button') {
+      document = {};
+    } else {
+      return;
+    }
+  } else {
+    document = { [createField]: createValue };
   }
-  const document = { [createField]: createValue };
 
   clearLinkAddError();
   try {
