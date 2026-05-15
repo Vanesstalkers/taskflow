@@ -10,3 +10,10 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* Dev-режим: подсветка элементов с якорем для замечаний */
+body.dev-mode-active [data-dev-id]:hover {
+  outline: 2px dashed rgb(var(--v-theme-warning));
+  outline-offset: 2px;
+  border-radius: 4px;
+}

@@ -1,6 +1,7 @@
 <template>
   <div
     class="app-input-file-wrap"
+    :data-dev-id="devAnchorId"
     :class="{
       'app-input-file-wrap--success': showSuccessOutline,
       'app-input-file-wrap--error': showErrorOutline,
@@ -44,6 +45,7 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getBackendState } from '../main.js';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -61,6 +63,7 @@ const props = defineProps({
   collection: { type: String, required: true },
   /** Имя поля — в БД хранится имя файла на сервере (`application/resources/<name>`) */
   field: { type: String, required: true },
+  devId: { type: String, default: '' },
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   hint: { type: String, default: '' },
@@ -75,6 +78,8 @@ const props = defineProps({
   /** Несколько файлов за раз (для новых записей через `createLinkedDocument` — по файлу создаётся документ и загрузка) */
   multiple: { type: Boolean, default: false },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const pickedFile = ref(null);
 const saving = ref(false);

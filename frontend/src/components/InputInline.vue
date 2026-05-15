@@ -1,6 +1,7 @@
 <template>
   <div
     class="inline-edit-text align-self-stretch"
+    :data-dev-id="devAnchorId"
     :class="{
       'inline-edit-text--success': showSuccessOutline,
       'inline-edit-text--error': showErrorOutline,
@@ -45,6 +46,7 @@
 
 <script setup>
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
 const OUTLINE_FLASH_MS = 2000;
@@ -65,6 +67,7 @@ const props = defineProps({
   collection: { type: String, required: true },
   /** Имя поля для $set */
   field: { type: String, required: true },
+  devId: { type: String, default: '' },
   /**
    * Если true — пустая строка после trim считается ошибкой и не уходит на сервер.
    */
@@ -74,6 +77,8 @@ const props = defineProps({
   /** Смена ключа сбрасывает подсветку и внутренние ошибки сохранения */
   contextKey: { type: String, default: '' },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const emit = defineEmits(['saved', 'update:modelValue']);
 

@@ -1,0 +1,489 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-15T13:11:51.644Z",
+  "anchors": {
+    "components.TaskForm.task.title": {
+      "devId": "components.TaskForm.task.title",
+      "ui": {
+        "file": "src/components/TaskForm.vue",
+        "line": 6,
+        "component": "InputInline"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "task",
+        "field": "title",
+        "schemaFile": "backend/application/domain/task.js"
+      }
+    },
+    "components.TaskForm.link.task.userLinks": {
+      "devId": "components.TaskForm.link.task.userLinks",
+      "ui": {
+        "file": "src/components/TaskForm.vue",
+        "line": 60,
+        "component": "ComplexBlock"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "user",
+        "parentCollection": "task",
+        "linkField": "userLinks",
+        "schemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "components.TaskForm.link.task.docLinks": {
+      "devId": "components.TaskForm.link.task.docLinks",
+      "ui": {
+        "file": "src/components/TaskForm.vue",
+        "line": 89,
+        "component": "ComplexBlock"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "doc",
+        "parentCollection": "task",
+        "linkField": "docLinks",
+        "schemaFile": "backend/application/domain/collections/doc.js"
+      }
+    },
+    "components.TaskForm.doc.title": {
+      "devId": "components.TaskForm.doc.title",
+      "ui": {
+        "file": "src/components/TaskForm.vue",
+        "line": 111,
+        "component": "Input",
+        "label": "Название"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "doc",
+        "field": "title",
+        "schemaFile": "backend/application/domain/collections/doc.js"
+      }
+    },
+    "components.TaskForm.doc.fileName": {
+      "devId": "components.TaskForm.doc.fileName",
+      "ui": {
+        "file": "src/components/TaskForm.vue",
+        "line": 119,
+        "component": "InputFile",
+        "label": "Файл"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "doc",
+        "field": "fileName",
+        "schemaFile": "backend/application/domain/collections/doc.js"
+      }
+    },
+    "createSubdivision.link.task.createdSubdivisionLinks": {
+      "devId": "createSubdivision.link.task.createdSubdivisionLinks",
+      "ui": {
+        "file": "src/components/tasks/CreateSubdivision.vue",
+        "line": 3,
+        "component": "ComplexBlock",
+        "label": "Подразделение"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "subdivision",
+        "parentCollection": "task",
+        "linkField": "createdSubdivisionLinks",
+        "schemaFile": "backend/application/domain/collections/subdivision.js",
+        "parentSchemaFile": "backend/application/domain/collections/task/createSubdivision.js"
+      }
+    },
+    "createSubdivision.subdivision.name": {
+      "devId": "createSubdivision.subdivision.name",
+      "ui": {
+        "file": "src/components/tasks/CreateSubdivision.vue",
+        "line": 26,
+        "component": "Input",
+        "label": "Название"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "subdivision",
+        "field": "name",
+        "schemaFile": "backend/application/domain/collections/subdivision.js"
+      }
+    },
+    "createSubdivision.subdivision.address": {
+      "devId": "createSubdivision.subdivision.address",
+      "ui": {
+        "file": "src/components/tasks/CreateSubdivision.vue",
+        "line": 34,
+        "component": "Input",
+        "label": "Адрес"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "subdivision",
+        "field": "address",
+        "schemaFile": "backend/application/domain/collections/subdivision.js"
+      }
+    },
+    "addUser.link.task.createdUserLinks": {
+      "devId": "addUser.link.task.createdUserLinks",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 3,
+        "component": "ComplexBlock"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "user",
+        "parentCollection": "task",
+        "linkField": "createdUserLinks",
+        "schemaFile": "backend/application/domain/collections/user.js",
+        "parentSchemaFile": "backend/application/domain/collections/task/addUser.js"
+      }
+    },
+    "addUser.user.login": {
+      "devId": "addUser.user.login",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 27,
+        "component": "Input",
+        "label": "Логин"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "user",
+        "field": "login",
+        "schemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "addUser.user.password": {
+      "devId": "addUser.user.password",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 28,
+        "component": "Input",
+        "label": "Пароль"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "user",
+        "field": "password",
+        "schemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "addUser.user.avatar": {
+      "devId": "addUser.user.avatar",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 37,
+        "component": "InputFile",
+        "label": "Аватар"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "user",
+        "field": "avatar",
+        "schemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "addUser.link.user.userRoleList": {
+      "devId": "addUser.link.user.userRoleList",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 45,
+        "component": "ComplexBlock",
+        "label": "Роли"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "userRole",
+        "parentCollection": "user",
+        "linkField": "userRoleList",
+        "schemaFile": "backend/application/domain/collections/userRole.js",
+        "parentSchemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "addUser.link.user.ppList": {
+      "devId": "addUser.link.user.ppList",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 73,
+        "component": "ComplexBlock",
+        "label": "Персональные данные"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "pp",
+        "parentCollection": "user",
+        "linkField": "ppList",
+        "schemaFile": "backend/application/domain/collections/pp.js",
+        "parentSchemaFile": "backend/application/domain/collections/user.js"
+      }
+    },
+    "addUser.pp.lastName": {
+      "devId": "addUser.pp.lastName",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 91,
+        "component": "Input",
+        "label": "Фамилия"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "lastName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addUser.pp.firstName": {
+      "devId": "addUser.pp.firstName",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 99,
+        "component": "Input",
+        "label": "Имя"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "firstName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addUser.pp.middleName": {
+      "devId": "addUser.pp.middleName",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 107,
+        "component": "Input",
+        "label": "Отчество"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "middleName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addUser.pp.birthDate": {
+      "devId": "addUser.pp.birthDate",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 115,
+        "component": "Input",
+        "label": "Дата рождения"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "birthDate",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addUser.pp.gender": {
+      "devId": "addUser.pp.gender",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 123,
+        "component": "Radio",
+        "label": "Пол"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "gender",
+        "lst": "genders",
+        "schemaFile": "backend/application/domain/collections/pp.js",
+        "lstFile": "backend/application/domain/lst/genders.js"
+      }
+    },
+    "addUser.link.pp.phoneList": {
+      "devId": "addUser.link.pp.phoneList",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 134,
+        "component": "ComplexBlock",
+        "label": "Телефоны"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "phone",
+        "parentCollection": "pp",
+        "linkField": "phoneList",
+        "schemaFile": "backend/application/domain/collections/phone.js",
+        "parentSchemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addUser.phone.phoneType": {
+      "devId": "addUser.phone.phoneType",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 162,
+        "component": "Select",
+        "label": "Тип"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "phone",
+        "field": "phoneType",
+        "lst": "phoneTypes",
+        "schemaFile": "backend/application/domain/collections/phone.js",
+        "lstFile": "backend/application/domain/lst/phoneTypes.js"
+      }
+    },
+    "addUser.phone.number": {
+      "devId": "addUser.phone.number",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 173,
+        "component": "Input",
+        "label": "Номер"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "phone",
+        "field": "number",
+        "schemaFile": "backend/application/domain/collections/phone.js"
+      }
+    },
+    "addUser.phone.active": {
+      "devId": "addUser.phone.active",
+      "ui": {
+        "file": "src/components/tasks/AddUser.vue",
+        "line": 181,
+        "component": "Checkbox",
+        "label": "Активный"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "phone",
+        "field": "active",
+        "schemaFile": "backend/application/domain/collections/phone.js"
+      }
+    },
+    "addEmployee.link.task.createdEmployeeLinks": {
+      "devId": "addEmployee.link.task.createdEmployeeLinks",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 2,
+        "component": "ComplexBlock",
+        "label": "Сотрудник"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "employee",
+        "parentCollection": "task",
+        "linkField": "createdEmployeeLinks",
+        "schemaFile": "backend/application/domain/collections/employee.js",
+        "parentSchemaFile": "backend/application/domain/collections/task/addEmployee.js"
+      }
+    },
+    "addEmployee.employee.position": {
+      "devId": "addEmployee.employee.position",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 27,
+        "component": "Input",
+        "label": "Название должности"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "employee",
+        "field": "position",
+        "schemaFile": "backend/application/domain/collections/employee.js"
+      }
+    },
+    "addEmployee.employee.positionType": {
+      "devId": "addEmployee.employee.positionType",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 38,
+        "component": "Select",
+        "label": "тип должности"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "employee",
+        "field": "positionType",
+        "lst": "jobTitles",
+        "schemaFile": "backend/application/domain/collections/employee.js",
+        "lstFile": "backend/application/domain/lst/jobTitles.js"
+      }
+    },
+    "addEmployee.link.employee.subdivision": {
+      "devId": "addEmployee.link.employee.subdivision",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 50,
+        "component": "ComplexBlock"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "subdivision",
+        "parentCollection": "employee",
+        "linkField": "subdivision",
+        "schemaFile": "backend/application/domain/collections/subdivision.js",
+        "parentSchemaFile": "backend/application/domain/collections/employee.js"
+      }
+    },
+    "addEmployee.link.employee.pp": {
+      "devId": "addEmployee.link.employee.pp",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 86,
+        "component": "ComplexBlock"
+      },
+      "domain": {
+        "kind": "link",
+        "collection": "pp",
+        "parentCollection": "employee",
+        "linkField": "pp",
+        "schemaFile": "backend/application/domain/collections/pp.js",
+        "parentSchemaFile": "backend/application/domain/collections/employee.js"
+      }
+    },
+    "addEmployee.pp.lastName": {
+      "devId": "addEmployee.pp.lastName",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 108,
+        "component": "Input",
+        "label": "Фамилия"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "lastName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addEmployee.pp.firstName": {
+      "devId": "addEmployee.pp.firstName",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 119,
+        "component": "Input",
+        "label": "Имя"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "firstName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    },
+    "addEmployee.pp.middleName": {
+      "devId": "addEmployee.pp.middleName",
+      "ui": {
+        "file": "src/components/tasks/AddEmployee.vue",
+        "line": 130,
+        "component": "Input",
+        "label": "Отчество"
+      },
+      "domain": {
+        "kind": "field",
+        "collection": "pp",
+        "field": "middleName",
+        "schemaFile": "backend/application/domain/collections/pp.js"
+      }
+    }
+  }
+}

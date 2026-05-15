@@ -1,6 +1,7 @@
 <template>
   <div
     class="multi-entity-picker__add multi-entity-picker__radio-pick d-flex flex-column ga-2 align-self-stretch"
+    :data-dev-id="devAnchorId"
     :class="{
       'app-radio-wrap--success': showSuccessOutline,
       'app-radio-wrap--error': showErrorOutline,
@@ -33,6 +34,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
 
@@ -57,6 +59,7 @@ const props = defineProps({
   collection: { type: String, default: '' },
   _id: { type: String, default: '' },
   field: { type: String, default: '' },
+  devId: { type: String, default: '' },
   contextKey: { type: String, default: '' },
   /** Значение в хранилище, эквивалентное «пустому» (часто `''`) */
   emptyStoredValue: { type: String, default: '' },
@@ -66,6 +69,8 @@ const props = defineProps({
    */
   pickStoredAsEmpty: { type: String, default: '' },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const emit = defineEmits(['update:modelValue']);
 

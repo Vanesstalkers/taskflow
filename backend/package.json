@@ -48,6 +48,9 @@
     "prepush": "npm run lint && npm run types && npm run test",
     "types": "tsc -p tsconfig.json",
     "integration:metacom": "node scripts/metacom-integration.js",
+    "remarks:pending": "node scripts/fetch-pending-remarks.js",
+    "remarks:pending:json": "node scripts/fetch-pending-remarks.js --json",
+    "remarks:mark": "node scripts/mark-remarks-processed.js",
     "lint": "eslint . && prettier -c \"**/*.js\" \"**/*.json\" \"**/*.md\"",
     "fix": "eslint . --fix && prettier --write \"**/*.js\" \"**/*.json\" \"**/*.md\"",
     "db": "metasql c"

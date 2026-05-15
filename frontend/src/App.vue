@@ -6,8 +6,28 @@
           <div>
             <h1 class="text-h4 mb-1">{{ currentUserDisplay }}</h1>
             <p class="text-body-2 text-medium-emphasis">Статус backend: {{ status }}</p>
+            <v-switch
+              v-model="devMode"
+              class="dev-mode-switch mt-2"
+              color="warning"
+              density="compact"
+              hide-details
+              label="Dev-режим"
+            />
           </div>
-          <v-btn color="primary" prepend-icon="mdi-plus" @click="createTaskDialogOpen = true"> Новая задача </v-btn>
+          <div class="d-flex ga-2 flex-shrink-0">
+            <v-badge
+              v-if="devMode"
+              :content="remarksBadgeCount"
+              :model-value="remarksBadgeCount > 0"
+              color="warning"
+            >
+              <v-btn variant="tonal" prepend-icon="mdi-comment-text-multiple-outline" @click="openRemarksPanel">
+                Правки
+              </v-btn>
+            </v-badge>
+            <v-btn color="primary" prepend-icon="mdi-plus" @click="createTaskDialogOpen = true"> Новая задача </v-btn>
+          </div>
         </div>
 
         <v-alert v-if="errorText" type="error" variant="tonal" class="mb-4">
@@ -53,6 +73,10 @@
       <CreateTaskDialog v-model="createTaskDialogOpen" />
 
       <AuthDialog ref="authDialogRef" />
+
+      <RemarkDialog v-model="remarkDialogOpen" :payload="remarkPayload" @saved="onRemarkSaved" />
+
+      <RemarksPanel ref="remarksPanelRef" v-model="remarksPanelOpen" @changed="refreshRemarksBadge" />
     </v-main>
 
     <v-navigation-drawer
@@ -79,19 +103,29 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { initBackend } from './main.js';
 import { subscribeStoreUpdates } from './utils/storeActions.js';
 import AuthDialog from './components/AuthDialog.vue';
 import CreateTaskDialog from './components/CreateTaskDialog.vue';
 import TaskForm from './components/TaskForm.vue';
+import RemarkDialog from './components/RemarkDialog.vue';
+import RemarksPanel from './components/RemarksPanel.vue';
+import { getRemarks } from './utils/remarkActions.js';
+import { normalizeRemarkStatus } from './utils/remarkStatus.js';
+import { useDevRemarkCapture } from './composables/useDevRemarkCapture.js';
+import { useDevMode } from './composables/useDevMode.js';
 import { useStore } from './stores/store.js';
 
 const globalStore = useStore();
+const { devMode } = useDevMode();
 
 const status = ref('Инициализация...');
 const errorText = ref('');
 const createTaskDialogOpen = ref(false);
+const remarksPanelOpen = ref(false);
+const remarksPanelRef = ref(null);
+const remarksBadgeCount = ref(0);
 /** Справочник с бэка: `{ code, title }` → подписи типов на доске и в TaskForm */
 const taskTypeOptions = computed(() => {
   const raw = globalStore.lst.taskTypes;
@@ -106,8 +140,53 @@ const taskTypeOptions = computed(() => {
 const detailDrawer = ref(false);
 const selectedTaskId = ref('');
 const movingTaskId = ref('');
+
+const { remarkDialogOpen, remarkPayload } = useDevRemarkCapture({
+  scopeHint: () => {
+    const task = globalStore.store.task?.[selectedTaskId.value];
+    return task?.taskType ? String(task.taskType) : '';
+  },
+  getContext: () => {
+    const taskId = selectedTaskId.value;
+    if (!taskId) return {};
+    const task = globalStore.store.task?.[taskId];
+    return {
+      taskId,
+      taskType: task?.taskType ? String(task.taskType) : '',
+    };
+  },
+});
 const authDialogRef = ref(null);
 let api = null;
+
+function openRemarksPanel() {
+  remarksPanelOpen.value = true;
+}
+
+async function refreshRemarksBadge() {
+  try {
+    const res = await getRemarks({ limit: 200 });
+    const list = res.remarks || [];
+    remarksBadgeCount.value = list.filter((r) => {
+      const s = normalizeRemarkStatus(r.status);
+      return s === 'new' || s === 'review';
+    }).length;
+  } catch {
+    remarksBadgeCount.value = 0;
+  }
+}
+
+function onRemarkSaved() {
+  void refreshRemarksBadge();
+  remarksPanelRef.value?.loadRemarks?.();
+}
+
+watch(devMode, (active) => {
+  if (!active) {
+    remarksPanelOpen.value = false;
+    remarkDialogOpen.value = false;
+  }
+});
 
 const columns = [
   { id: 'todo', title: 'To Do' },
@@ -260,6 +339,7 @@ onMounted(async () => {
     });
 
     status.value = 'Подключено';
+    await refreshRemarksBadge();
   } catch (error) {
     status.value = 'Недоступен';
     errorText.value = `Не удалось подключиться к backend: ${error.message}`;

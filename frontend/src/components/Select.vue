@@ -1,6 +1,7 @@
 <template>
   <div
     class="app-select-wrap"
+    :data-dev-id="devAnchorId"
     :class="{
       'app-select-wrap--success': showSuccessOutline,
       'app-select-wrap--error': showErrorOutline,
@@ -43,6 +44,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
 
@@ -79,8 +81,12 @@ const props = defineProps({
   collection: { type: String, default: '' },
   _id: { type: String, default: '' },
   field: { type: String, default: '' },
+  /** Полный devId из manifest; иначе `collection.field` */
+  devId: { type: String, default: '' },
   contextKey: { type: String, default: '' },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const emit = defineEmits(['update:modelValue']);
 

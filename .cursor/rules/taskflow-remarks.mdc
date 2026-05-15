@@ -1,0 +1,12 @@
+---
+description: Замечания пользователя из UI (коллекция remark, API getPendingRemarks)
+globs:
+  - frontend/**/*
+  - backend/application/api/remarks/**
+  - backend/application/domain/collections/remark.js
+  - backend/scripts/fetch-pending-remarks.js
+---
+
+При запросе обработать замечания пользователя или UI-feedback — **следовать skill `taskflow-process-remarks`** (`.cursor/skills/taskflow-process-remarks/SKILL.md`): pending → правки → `npm run build` + `ci:anchors` → `metacom-integration.js` по `context.taskType` → `remarks:mark`. API замечаний: **`backend/application/api/remarks/`** (Metacom unit `remarks`).
+
+Кратко: кнопка **«Правки»** в шапке; ПКМ по полю → `saveRemark`; агент: `remarks:pending:json`; после правок `remarks:mark` → статус **review**; пользователь в окне правок — **Готово** или **Отправить снова**.

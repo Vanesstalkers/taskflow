@@ -1,5 +1,5 @@
 <template>
-  <div class="multi-entity-picker">
+  <div class="multi-entity-picker" :data-dev-id="devAnchorId">
     <div
       v-if="showBlockTitle"
       class="multi-entity-picker__block-title text-subtitle-2 text-high-emphasis mb-2"
@@ -216,6 +216,7 @@ import Input from './Input.vue';
 import InputFile from './InputFile.vue';
 import Radio from './Radio.vue';
 import Select from './Select.vue';
+import { buildLinkPartialDevId } from '../utils/devAnchorLink.js';
 
 const globalStore = useStore();
 
@@ -240,6 +241,8 @@ const props = defineProps({
    */
   add: { type: Object, default: () => ({}) },
   ui: { type: Object, default: () => ({}) },
+  /** Полный devId; иначе `link.{parentCollection}.{linkField}` */
+  devId: { type: String, default: '' },
 });
 
 const emit = defineEmits([
@@ -309,6 +312,11 @@ function obj(x) {
 }
 
 /** Плоские значения с учётом групп `persist` / `list` / `texts` / … и дефолтов */
+const devAnchorId = computed(() => {
+  if (props.devId) return String(props.devId).trim();
+  return buildLinkPartialDevId(obj(props.persist)) || undefined;
+});
+
 const flat = computed(() => {
   const persist = obj(props.persist);
   const list = obj(props.list);

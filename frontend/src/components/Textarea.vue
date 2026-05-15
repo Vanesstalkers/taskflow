@@ -1,6 +1,7 @@
 <template>
   <div
     class="app-textarea-wrap"
+    :data-dev-id="devAnchorId"
     :class="{
       'app-textarea-wrap--success': showSuccessOutline,
       'app-textarea-wrap--error': showErrorOutline,
@@ -26,6 +27,7 @@
 
 <script setup>
 import { onUnmounted, ref, watch } from 'vue';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -41,6 +43,7 @@ const props = defineProps({
   collection: { type: String, required: true },
   /** Имя поля для $set */
   field: { type: String, required: true },
+  devId: { type: String, default: '' },
   label: { type: String, default: '' },
   rows: { type: [Number, String], default: 4 },
   disabled: { type: Boolean, default: false },
@@ -48,6 +51,8 @@ const props = defineProps({
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const saving = ref(false);
 const saveError = ref('');

@@ -1,0 +1,20 @@
+({
+  schema: () => ({
+    comment: '',
+    devId: '',
+    partialDevId: '',
+    route: '',
+    ui: {},
+    domain: {},
+    context: {},
+    status: 'new',
+    createdBy: '',
+    createdAt: null,
+    updatedAt: null,
+    reviewedAt: null,
+    resubmittedAt: null,
+    revertedAt: null,
+    revertRequested: false,
+    completedAt: null,
+  }),
+});

@@ -19,7 +19,7 @@ export async function initBackend() {
   if (backendState) return backendState;
 
   const metacom = Metacom.create(getApiUrl(), { callTimeout: 100000 });
-  await metacom.load('auth', 'core', 'files');
+  await metacom.load('auth', 'core', 'files', 'remarks');
 
   backendState = { metacom, api: metacom.api };
   return backendState;

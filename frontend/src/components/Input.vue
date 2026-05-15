@@ -1,6 +1,7 @@
 <template>
   <div
     class="app-input-wrap"
+    :data-dev-id="devAnchorId"
     :class="{
       'app-input-wrap--success': showSuccessOutline,
       'app-input-wrap--error': showErrorOutline,
@@ -26,6 +27,7 @@
 
 <script setup>
 import { onUnmounted, ref, watch } from 'vue';
+import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -41,6 +43,8 @@ const props = defineProps({
   collection: { type: String, default: '' },
   /** Имя поля для $set (не нужно при ephemeral) */
   field: { type: String, default: '' },
+  /** Полный devId из manifest; иначе `collection.field` */
+  devId: { type: String, default: '' },
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   hint: { type: String, default: '' },
@@ -51,6 +55,8 @@ const props = defineProps({
   /** Внешний индикатор загрузки (например создание связанного документа) */
   loading: { type: Boolean, default: false },
 });
+
+const devAnchorId = useDevAnchorId(props);
 
 const emit = defineEmits(['commit']);
 
