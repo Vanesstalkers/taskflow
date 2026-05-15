@@ -24,6 +24,7 @@
       :item-value="itemValue"
       :label="label"
       :placeholder="placeholder"
+      :persistent-placeholder="hasPlaceholder"
       no-filter
       :multiple="multiple"
       clearable
@@ -72,7 +73,7 @@ const props = defineProps({
   syncMenu: { type: Boolean, default: false },
   multiple: { type: Boolean, default: false },
   density: { type: String, default: 'compact' },
-  singleLine: { type: Boolean, default: true },
+  singleLine: { type: Boolean, default: false },
   pickerClass: { type: String, default: '' },
   useCustomItemRow: { type: Boolean, default: false },
   showCreateNewOption: { type: Boolean, default: false },
@@ -111,13 +112,28 @@ const persistEnabled = computed(() => {
   return Boolean(c && id && f);
 });
 
+const hasPlaceholder = computed(() => Boolean(String(props.placeholder || '').trim()));
+
 const resolvedItems = computed(() => {
+  const vk = props.itemValue;
+  const tk = props.itemTitle;
+  let items = [];
   const direct = props.items;
-  if (Array.isArray(direct) && direct.length > 0) return direct;
-  const key = String(props.lstName || '').trim();
-  if (!key) return [];
-  const raw = globalStore.lst[key];
-  return Array.isArray(raw) ? raw : [];
+  if (Array.isArray(direct) && direct.length > 0) {
+    items = direct;
+  } else {
+    const key = String(props.lstName || '').trim();
+    if (key) {
+      const raw = globalStore.lst[key];
+      if (Array.isArray(raw)) items = raw;
+    }
+  }
+  const current = normalizePersistValue(props.modelValue);
+  if (current && !items.some((row) => String(row?.[vk] ?? '') === current)) {
+    const match = items.find((row) => String(row?.[tk] ?? '') === current);
+    items = [{ [tk]: match ? match[tk] : current, [vk]: current }, ...items];
+  }
+  return items;
 });
 
 const menuBind = computed(() => {
@@ -148,6 +164,21 @@ function normalizePersistValue(val) {
 
 function storedFromModel(raw) {
   return normalizePersistValue(raw);
+}
+
+function displayTextForValue(val) {
+  const current = normalizePersistValue(val);
+  if (!current) return '';
+  const vk = props.itemValue;
+  const tk = props.itemTitle;
+  const hit = resolvedItems.value.find((row) => String(row?.[vk] ?? '') === current);
+  if (!hit) return current;
+  return String(hit[tk] ?? '').trim() || current;
+}
+
+function syncSearchInputFromModel() {
+  const next = displayTextForValue(props.modelValue);
+  if (search.value !== next) search.value = next;
 }
 
 function clearOutlineFlash() {
@@ -203,6 +234,23 @@ watch(
   },
 );
 
+watch(
+  () => [props.modelValue, resolvedItems.value],
+  () => {
+    if (menu.value) return;
+    syncSearchInputFromModel();
+  },
+  { immediate: true },
+);
+
+watch(menu, (open) => {
+  if (open && props.syncMenu) {
+    search.value = '';
+    return;
+  }
+  if (!open) syncSearchInputFromModel();
+});
+
 onUnmounted(() => {
   clearOutlineFlash();
 });
@@ -239,10 +287,9 @@ async function persistFromPicker(val) {
 }
 
 function handleModelUpdate(val) {
-  if (!persistEnabled.value) {
-    emit('update:modelValue', val);
-    return;
-  }
+  const normalized = val == null || val === '' ? null : val;
+  emit('update:modelValue', normalized);
+  if (!persistEnabled.value) return;
   void persistFromPicker(val);
 }
 
@@ -263,6 +310,7 @@ defineExpose({ focus });
 <style scoped>
 .app-select-wrap {
   display: block;
+  width: 100%;
   max-width: 100%;
   border-radius: 4px;
   transition: outline-color 0.15s ease;

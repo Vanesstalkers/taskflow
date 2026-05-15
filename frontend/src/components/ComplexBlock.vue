@@ -17,14 +17,15 @@
         class="multi-entity-picker__label text-body-2"
         :class="{ 'multi-entity-picker__label--full-width': flat.fullWidthLabels }"
       >
-        <span
+        <component
+          :is="flat.fullWidthLabels ? 'div' : 'span'"
           class="multi-entity-picker__label-text"
           :class="{ 'multi-entity-picker__label-text--full-width': flat.fullWidthLabels }"
         >
           <slot name="label" :_id="String(key)" :record="getStoreRecord(key)">
             {{ key }}
           </slot>
-        </span>
+        </component>
         <v-btn
           v-if="linkPersistEnabled && !isRemoveBlocked"
           type="button"
@@ -838,8 +839,8 @@ function getStoreRecord(key) {
   const k = String(key);
   const collection = entityStoreCollection.value;
   if (!collection) return undefined;
-  const bucket = globalStore.store[collection];
-  if (!bucket || typeof bucket !== 'object') return undefined;
+  const bucket = getEntityBucket();
+  if (!bucket[k]) bucket[k] = { _id: k };
   return bucket[k];
 }
 
@@ -1074,14 +1075,17 @@ function onNonLinkSelectionUpdate(next) {
 }
 
 .multi-entity-picker__label-text--full-width {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   width: 100%;
+  min-width: 100%;
   align-self: stretch;
 }
 
 .multi-entity-picker__label-text--full-width :deep(.app-input-wrap),
-.multi-entity-picker__label-text--full-width :deep(.app-input-file-wrap) {
+.multi-entity-picker__label-text--full-width :deep(.app-input-file-wrap),
+.multi-entity-picker__label-text--full-width :deep(.app-select-wrap) {
   width: 100%;
+  user-select: auto;
 }
 
 .multi-entity-picker__add-trigger {
