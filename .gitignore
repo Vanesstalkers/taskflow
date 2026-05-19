@@ -4,3 +4,4 @@ backend/uploads/
 backend/log/last-integration-error.json
 backend/log/last-integration-error.txt
 frontend/dev-anchor-manifest.json
+frontend/dev-anchor-manifest.json

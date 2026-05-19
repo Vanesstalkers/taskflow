@@ -169,15 +169,21 @@ function onBlur() {
 </script>
 
 <style scoped>
-.app-input-wrap--success :deep(.v-field--variant-outlined .v-field__outline) {
-  color: rgb(var(--v-theme-success)) !important;
-  --v-field-border-opacity: 1 !important;
-  transition: color 0.15s ease;
+.app-input-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 4px;
+  transition: outline-color 0.15s ease;
 }
 
-.app-input-wrap--error :deep(.v-field--variant-outlined .v-field__outline) {
-  color: rgb(var(--v-theme-error)) !important;
-  --v-field-border-opacity: 1 !important;
-  transition: color 0.15s ease;
+.app-input-wrap--success {
+  outline: 2px solid rgb(var(--v-theme-success));
+  outline-offset: 2px;
+}
+
+.app-input-wrap--error {
+  outline: 2px solid rgb(var(--v-theme-error));
+  outline-offset: 2px;
 }
 </style>

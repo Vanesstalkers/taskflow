@@ -60,6 +60,18 @@ npm run remarks:pending:json
 - Новые поля в task UI — через **`Input` / `Select` / …** и `storeActions`, не сырой RPC.
 - Новая коллекция в схеме → файл **`backend/application/domain/collections/<name>.js`** (см. `taskflow-ui-backend`).
 
+### Граница правок на фронтенде (обязательно)
+
+**Запрещено** менять общие Vue-компоненты (`frontend/src/components/*.vue` вне каталога задач): `Input`, `Select`, `ComplexBlock`, `TaskForm`, диалоги и т.п.
+
+**Разрешено** на фронте — только компонент **конкретной задачи** по `context.taskType` / `ui.file`:
+
+- каталог **`frontend/src/components/tasks/`**;
+- файл **`{PascalCase(taskType)}.vue`** (например `addEmployee` → `AddEmployee.vue`), указанный в замечании;
+- при необходимости — связанные **backend**-файлы (`domain/collections/`, `domain/lst/`, `collections/task/<taskType>.js`), если remark или схема этого требуют.
+
+Если замечание нельзя закрыть без правки общего компонента — **не менять его в этом цикле**; описать пользователю блокер и что нужно вынести в отдельную задачу.
+
 Зафиксировать **`context.taskType`** из каждого обработанного замечания (см. §4).
 
 ---
@@ -173,6 +185,7 @@ npm run remarks:pending:json
 - ❌ Пропустить integration для `context.taskType` из замечания.
 - ❌ Пометить `processed` при падении integration.
 - ❌ Менять только фронт, если remark указывает на `domain/*.js` / `lst/*.js`.
+- ❌ Править `Input.vue`, `Select.vue`, `ComplexBlock.vue` и другие общие компоненты — только `frontend/src/components/tasks/<TaskType>.vue` для замечания.
 
 ---
 
