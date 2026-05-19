@@ -23,14 +23,22 @@
     >
       <template #label="{ _id, record = {} }">
         <div class="d-flex flex-column ga-4 align-self-stretch w-100">
-          <Select
-            :model-value="record.position || ''"
-            lst-name="jobTitles"
+          <Input
+            v-model="record.position"
             label="Должность"
             collection="employee"
             :_id="_id"
             field="position"
             :context-key="`${_id}:position`"
+          />
+          <Select
+            :model-value="record.positionType || ''"
+            lst-name="jobTitles"
+            label="Тип должности"
+            collection="employee"
+            :_id="_id"
+            field="positionType"
+            :context-key="`${_id}:positionType`"
           />
           <ComplexBlock
             v-if="_id"
@@ -45,7 +53,7 @@
             :add="{
               addType: 'search',
               showCreateNewOption: false,
-              minSelection: 1,
+              minSelection: 0,
               maxSelection: 1,
             }"
             :texts="{

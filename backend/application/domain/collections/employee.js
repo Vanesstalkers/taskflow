@@ -1,6 +1,7 @@
 ({
   schema: () => ({
-    position: { lst: 'jobTitles' },
+    position: '',
+    positionType: { lst: 'jobTitles' },
     subdivision: {
       collection: 'subdivision',
       schema: domain.collections.subdivision.schema(),
