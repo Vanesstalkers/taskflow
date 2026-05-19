@@ -65,6 +65,20 @@ declare global {
       search?: string;
       limit?: number;
     }): Promise<{ items: Record<string, unknown>[]; currentUserId: string; collection: string }>;
+
+    /** Глобальный поиск: задачи пользователя и коллекции с `searchFields` */
+    function searchGlobal(params: {
+      search?: string;
+      limit?: number;
+    }): Promise<{
+      groups: Array<{
+        kind: 'task' | 'collection';
+        collection: string;
+        title: string;
+        items: Array<{ code: string; title: string }>;
+      }>;
+      currentUserId: string;
+    }>;
   }
 
   namespace lib {}

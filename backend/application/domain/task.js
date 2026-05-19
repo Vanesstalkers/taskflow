@@ -1,4 +1,5 @@
 ({
+  title: 'Задачи',
   statuses: ['todo', 'inProgress', 'done'],
 
   defaultSchema: {

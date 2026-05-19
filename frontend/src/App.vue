@@ -1,35 +1,18 @@
 <template>
   <v-app class="app-root">
+    <AppNavbar
+      v-model:dev-mode="devMode"
+      :current-user-display="currentUserDisplay"
+      :status="`Статус backend: ${status}`"
+      :remarks-badge-count="remarksBadgeCount"
+      @open-remarks="openRemarksPanel"
+      @create-task="createTaskDialogOpen = true"
+      @pick-task="onNavbarPickTask"
+      @pick-entity="onNavbarPickEntity"
+    />
+
     <v-main class="app-main" scrollable>
       <v-container class="app-content py-8">
-        <div class="d-flex align-center justify-space-between mb-4">
-          <div>
-            <h1 class="text-h4 mb-1">{{ currentUserDisplay }}</h1>
-            <p class="text-body-2 text-medium-emphasis">Статус backend: {{ status }}</p>
-            <v-switch
-              v-model="devMode"
-              class="dev-mode-switch mt-2"
-              color="warning"
-              density="compact"
-              hide-details
-              label="Dev-режим"
-            />
-          </div>
-          <div class="d-flex ga-2 flex-shrink-0">
-            <v-badge
-              v-if="devMode"
-              :content="remarksBadgeCount"
-              :model-value="remarksBadgeCount > 0"
-              color="warning"
-            >
-              <v-btn variant="tonal" prepend-icon="mdi-comment-text-multiple-outline" @click="openRemarksPanel">
-                Правки
-              </v-btn>
-            </v-badge>
-            <v-btn color="primary" prepend-icon="mdi-plus" @click="createTaskDialogOpen = true"> Новая задача </v-btn>
-          </div>
-        </div>
-
         <v-alert v-if="errorText" type="error" variant="tonal" class="mb-4">
           {{ errorText }}
         </v-alert>
@@ -106,6 +89,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { initBackend } from './main.js';
 import { subscribeStoreUpdates } from './utils/storeActions.js';
+import AppNavbar from './components/AppNavbar.vue';
 import AuthDialog from './components/AuthDialog.vue';
 import CreateTaskDialog from './components/CreateTaskDialog.vue';
 import TaskForm from './components/TaskForm.vue';
@@ -254,6 +238,22 @@ const moveTask = async (id, step) => {
     movingTaskId.value = '';
   }
 };
+
+async function onNavbarPickTask(taskId) {
+  const id = String(taskId || '').trim();
+  if (!id) return;
+  const task = globalStore.store.task[id] || { _id: id };
+  await openTaskDetail(task);
+}
+
+function onNavbarPickEntity({ collection, code, title }) {
+  if (!collection || !code) return;
+  if (!globalStore.store[collection]) globalStore.store[collection] = {};
+  globalStore.store[collection][code] = {
+    _id: code,
+    ...(title ? { title } : {}),
+  };
+}
 
 const openTaskDetail = async (task) => {
   const rawId = task?._id;

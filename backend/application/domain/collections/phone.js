@@ -1,4 +1,5 @@
 ({
+  title: 'Телефоны',
   searchFields: ['number'],
   schema: () => ({
     number: '',

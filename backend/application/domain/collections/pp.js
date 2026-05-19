@@ -1,4 +1,5 @@
 ({
+  title: 'Физлица',
   searchFields: ['firstName', 'lastName'],
   schema: () => ({
     firstName: '',

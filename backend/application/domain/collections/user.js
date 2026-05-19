@@ -1,4 +1,5 @@
 ({
+  title: 'Пользователи',
   searchFields: ['login'],
   uniqueKey: ['login'],
   schema: () => ({
