@@ -236,8 +236,7 @@ async function handleUpdate(val) {
     await saveField({
       collection: String(props.collection).trim(),
       _id: String(props._id).trim(),
-      field: String(props.field).trim(),
-      value: toSave,
+      data: { [String(props.field).trim()]: toSave },
     });
     lastCommitted.value = toSave;
     flashSuccess();

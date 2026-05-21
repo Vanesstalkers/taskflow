@@ -44,9 +44,9 @@ declare global {
 
     function updateField(params: {
       collection: string;
-      id: string;
-      field: string;
-      value: unknown;
+      _id: string;
+      data: Record<string, unknown>;
+      taskType?: string;
     }): Promise<StatusResult>;
 
     /** Одна связь в мапе (например userLinks): add / remove по ключу targetId */
@@ -65,6 +65,20 @@ declare global {
       search?: string;
       limit?: number;
     }): Promise<{ items: Record<string, unknown>[]; currentUserId: string; collection: string }>;
+
+    /** Начальные данные UI: вкладки, коллекции поиска, избранное, бейдж замечаний */
+    function loadView(): Promise<{
+      currentUserId: string;
+      activeTabId: string;
+      tabs: Array<Record<string, unknown>>;
+      collections: Array<{
+        collection: string;
+        title: string;
+        searchFields: string[];
+      }>;
+      favourites: Array<Record<string, unknown>>;
+      remarksBadgeCount: number;
+    }>;
 
     /** Глобальный поиск: задачи пользователя и коллекции с `searchFields` */
     function searchGlobal(params: {

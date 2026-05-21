@@ -4,53 +4,46 @@
       v-model:dev-mode="devMode"
       :current-user-display="currentUserDisplay"
       :status="`Статус backend: ${status}`"
+      :searchable-collections="searchableCollections"
+      :collections-loading="collectionsLoading"
       :remarks-badge-count="remarksBadgeCount"
       @open-remarks="openRemarksPanel"
       @create-task="createTaskDialogOpen = true"
       @pick-task="onNavbarPickTask"
       @pick-entity="onNavbarPickEntity"
+      @open-collection-list="onOpenCollectionList"
+    />
+
+    <AppFavouritesSidebar
+      v-model:rail="sidebarRail"
+      :favourites="favourites"
+      :can-add-from-tab="canAddFavouriteFromTab"
+      @open="openFavourite"
+      @edit="openFavouriteEdit"
+      @add-from-tab="addFavouriteFromActiveTab"
     />
 
     <v-main class="app-main" scrollable>
-      <v-container class="app-content py-8">
+      <v-container class="app-content py-4">
         <v-alert v-if="errorText" type="error" variant="tonal" class="mb-4">
           {{ errorText }}
         </v-alert>
 
-        <v-row>
-          <v-col v-for="column in columns" :key="column.id" cols="12" md="4">
-            <v-card class="column-card" variant="tonal">
-              <v-card-title class="d-flex align-center justify-space-between">
-                <span>{{ column.title }}</span>
-                <v-chip size="small" color="primary" variant="outlined">
-                  {{ tasksByStatus[column.id].length }}
-                </v-chip>
-              </v-card-title>
-              <v-divider />
-              <v-card-text class="column-body">
-                <v-card
-                  v-for="task in tasksByStatus[column.id]"
-                  :key="task._id"
-                  class="mb-3 task-card"
-                  variant="elevated"
-                >
-                  <v-card-item class="task-card-main" @click="openTaskDetail(task)">
-                    <v-card-title class="text-subtitle-1">{{ task.title }}</v-card-title>
-                    <div class="mt-2" @click.stop>
-                      <v-chip size="x-small" variant="tonal">
-                        {{ taskTypeLabelByValue.get(String(task.taskType || '')) || task.taskType }}
-                      </v-chip>
-                    </div>
-                  </v-card-item>
-                </v-card>
-
-                <p v-if="tasksByStatus[column.id].length === 0" class="text-body-2 text-medium-emphasis ma-2">
-                  Пока нет задач
-                </p>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+        <AppMainTabs
+          v-model:active-tab-id="activeTabId"
+          :tabs="tabs"
+          @close-tab="closeTab"
+          @favourite-added="onFavouriteAdded"
+          @open-entity="onListOpenEntity"
+        >
+          <template #board>
+            <KanbanBoard
+              :task-type-label-by-value="taskTypeLabelByValue"
+              @open-task="openTaskDetail"
+              @add-task-favourite="addTaskToFavourites"
+            />
+          </template>
+        </AppMainTabs>
       </v-container>
 
       <CreateTaskDialog v-model="createTaskDialogOpen" />
@@ -60,6 +53,13 @@
       <RemarkDialog v-model="remarkDialogOpen" :payload="remarkPayload" @saved="onRemarkSaved" />
 
       <RemarksPanel ref="remarksPanelRef" v-model="remarksPanelOpen" @changed="refreshRemarksBadge" />
+
+      <FavouriteEditDialog
+        v-model="favouriteEditOpen"
+        :favourite="favouriteEditTarget"
+        @saved="onFavouriteSaved"
+        @removed="onFavouriteRemoved"
+      />
     </v-main>
 
     <v-navigation-drawer
@@ -80,6 +80,7 @@
         :moving-task-id="movingTaskId"
         @close="closeTaskDetail"
         @move="(step) => moveTask(selectedTask._id, step)"
+        @add-favourite="addTaskToFavourites({ taskId: selectedTaskId, title: selectedTask?.title })"
       />
     </v-navigation-drawer>
   </v-app>
@@ -90,6 +91,14 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { initBackend } from './main.js';
 import { subscribeStoreUpdates } from './utils/storeActions.js';
 import AppNavbar from './components/AppNavbar.vue';
+import AppFavouritesSidebar from './components/AppFavouritesSidebar.vue';
+import AppMainTabs from './components/AppMainTabs.vue';
+import KanbanBoard from './components/KanbanBoard.vue';
+import FavouriteEditDialog from './components/FavouriteEditDialog.vue';
+import { useAppTabs } from './composables/useAppTabs.js';
+import { saveUserTabs } from './utils/userTabsActions.js';
+import { addFavourite } from './utils/favouriteActions.js';
+import { loadView as fetchLoadView } from './utils/loadViewActions.js';
 import AuthDialog from './components/AuthDialog.vue';
 import CreateTaskDialog from './components/CreateTaskDialog.vue';
 import TaskForm from './components/TaskForm.vue';
@@ -103,6 +112,73 @@ import { useStore } from './stores/store.js';
 
 const globalStore = useStore();
 const { devMode } = useDevMode();
+const {
+  tabs,
+  activeTabId,
+  openSearchResultTab,
+  openCollectionListTab,
+  closeTab,
+  restoreWorkspace,
+  serializeWorkspace,
+} = useAppTabs();
+
+let tabsPersistenceReady = false;
+let saveTabsTimer = null;
+
+function scheduleSaveUserTabs() {
+  if (!tabsPersistenceReady || !api?.core?.saveUserTabs) return;
+  if (saveTabsTimer) clearTimeout(saveTabsTimer);
+  saveTabsTimer = setTimeout(() => {
+    void saveUserTabs(serializeWorkspace()).catch(() => {});
+  }, 500);
+}
+
+function applyLoadView(view) {
+  if (!view || typeof view !== 'object') return;
+
+  restoreWorkspace({
+    activeTabId: view.activeTabId,
+    tabs: view.tabs,
+  });
+
+  remarksBadgeCount.value = Number(view.remarksBadgeCount) || 0;
+  searchableCollections.value = Array.isArray(view.collections) ? view.collections : [];
+
+  const list = Array.isArray(view.favourites) ? view.favourites : [];
+  favourites.value = list;
+  if (list.length > 0) {
+    globalStore.setData({
+      store: { favourite: Object.fromEntries(list.map((f) => [f._id, f])) },
+    });
+  }
+}
+
+async function loadView() {
+  if (!api?.core?.loadView) {
+    restoreWorkspace();
+    remarksBadgeCount.value = 0;
+    searchableCollections.value = [];
+    favourites.value = [];
+    tabsPersistenceReady = true;
+    return;
+  }
+
+  collectionsLoading.value = true;
+  try {
+    const view = await fetchLoadView();
+    applyLoadView(view);
+  } catch {
+    restoreWorkspace();
+    remarksBadgeCount.value = 0;
+    searchableCollections.value = [];
+    favourites.value = [];
+  } finally {
+    collectionsLoading.value = false;
+    tabsPersistenceReady = true;
+  }
+}
+
+watch([tabs, activeTabId], scheduleSaveUserTabs, { deep: true });
 
 const status = ref('Инициализация...');
 const errorText = ref('');
@@ -110,6 +186,17 @@ const createTaskDialogOpen = ref(false);
 const remarksPanelOpen = ref(false);
 const remarksPanelRef = ref(null);
 const remarksBadgeCount = ref(0);
+const searchableCollections = ref([]);
+const collectionsLoading = ref(false);
+const sidebarRail = ref(false);
+const favourites = ref([]);
+const favouriteEditOpen = ref(false);
+const favouriteEditTarget = ref(null);
+
+const canAddFavouriteFromTab = computed(() => {
+  const tab = tabs.value.find((t) => t.id === activeTabId.value);
+  return Boolean(tab?.closable);
+});
 /** Справочник с бэка: `{ code, title }` → подписи типов на доске и в TaskForm */
 const taskTypeOptions = computed(() => {
   const raw = globalStore.lst.taskTypes;
@@ -180,14 +267,6 @@ const columns = [
 
 const columnTitleByStatusId = Object.fromEntries(columns.map((column) => [column.id, column.title]));
 
-const taskList = computed(() => Object.values(globalStore.store.task));
-
-const tasksByStatus = computed(() => ({
-  todo: taskList.value.filter((task) => task.status === 'todo'),
-  inProgress: taskList.value.filter((task) => task.status === 'inProgress'),
-  done: taskList.value.filter((task) => task.status === 'done'),
-}));
-
 const getColumnIndex = (statusId) => columns.findIndex((column) => column.id === statusId);
 
 const canMoveLeft = (statusId) => getColumnIndex(statusId) > 0;
@@ -239,20 +318,137 @@ const moveTask = async (id, step) => {
   }
 };
 
-async function onNavbarPickTask(taskId) {
-  const id = String(taskId || '').trim();
-  if (!id) return;
-  const task = globalStore.store.task[id] || { _id: id };
-  await openTaskDetail(task);
-}
-
-function onNavbarPickEntity({ collection, code, title }) {
+function patchSearchEntityToStore({ collection, code, title }) {
   if (!collection || !code) return;
   if (!globalStore.store[collection]) globalStore.store[collection] = {};
+  const prev = globalStore.store[collection][code] || {};
   globalStore.store[collection][code] = {
+    ...prev,
     _id: code,
     ...(title ? { title } : {}),
   };
+}
+
+function onNavbarPickTask({ code, title, groupTitle }) {
+  const id = String(code || '').trim();
+  if (!id) return;
+  patchSearchEntityToStore({ collection: 'task', code: id, title });
+  openSearchResultTab({ kind: 'task', code: id, title, groupTitle });
+}
+
+function onNavbarPickEntity({ collection, code, title, groupTitle }) {
+  if (!collection || !code) return;
+  patchSearchEntityToStore({ collection, code, title });
+  openSearchResultTab({ kind: 'entity', collection, code, title, groupTitle });
+}
+
+function onOpenCollectionList({ collection, title }) {
+  if (!collection) return;
+  openCollectionListTab({ collection, title });
+}
+
+function onListOpenEntity(payload) {
+  onNavbarPickEntity(payload);
+}
+
+function upsertFavourite(fav) {
+  if (!fav?._id) return;
+  const index = favourites.value.findIndex((f) => f._id === fav._id);
+  if (index >= 0) favourites.value[index] = { ...favourites.value[index], ...fav };
+  else favourites.value.push(fav);
+}
+
+function openFavourite(fav) {
+  if (!fav?.targetCollection) return;
+
+  if (fav.targetKind === 'registry') {
+    openCollectionListTab({ collection: fav.targetCollection, title: fav.title });
+    return;
+  }
+
+  if (!fav?.targetId) return;
+
+  if (fav.targetKind === 'task') {
+    const id = String(fav.targetId).trim();
+    patchSearchEntityToStore({ collection: 'task', code: id, title: fav.title });
+    void openTaskDetail({ _id: id, title: fav.title });
+    return;
+  }
+
+  patchSearchEntityToStore({
+    collection: fav.targetCollection,
+    code: fav.targetId,
+    title: fav.title,
+  });
+  openSearchResultTab({
+    kind: 'entity',
+    collection: fav.targetCollection,
+    code: fav.targetId,
+    title: fav.title,
+    groupTitle: fav.title,
+  });
+}
+
+function openFavouriteEdit(fav) {
+  favouriteEditTarget.value = fav;
+  favouriteEditOpen.value = true;
+}
+
+function onFavouriteSaved(updated) {
+  upsertFavourite(updated);
+}
+
+function onFavouriteRemoved(id) {
+  favourites.value = favourites.value.filter((f) => f._id !== id);
+}
+
+function onFavouriteAdded(fav) {
+  upsertFavourite(fav);
+}
+
+async function addTaskToFavourites({ taskId, title }) {
+  const id = String(taskId || '').trim();
+  if (!id) return;
+  try {
+    const res = await addFavourite({
+      title: String(title || '').trim() || id,
+      icon: 'mdi-clipboard-text-outline',
+      targetKind: 'task',
+      targetCollection: 'task',
+      targetId: id,
+    });
+    upsertFavourite(res.favourite);
+  } catch (error) {
+    errorText.value = error.message || 'Не удалось добавить в избранное';
+  }
+}
+
+async function addFavouriteFromActiveTab() {
+  const tab = tabs.value.find((t) => t.id === activeTabId.value);
+  if (!tab?.closable) return;
+  try {
+    if (tab.type === 'collection-list') {
+      const res = await addFavourite({
+        title: tab.title,
+        icon: 'mdi-database-search-outline',
+        targetKind: 'registry',
+        targetCollection: tab.collection,
+      });
+      upsertFavourite(res.favourite);
+      return;
+    }
+    const targetKind = tab.type === 'task' ? 'task' : 'entity';
+    const res = await addFavourite({
+      title: tab.title,
+      icon: targetKind === 'task' ? 'mdi-clipboard-text-outline' : 'mdi-bookmark-outline',
+      targetKind,
+      targetCollection: tab.collection,
+      targetId: tab.code,
+    });
+    upsertFavourite(res.favourite);
+  } catch (error) {
+    errorText.value = error.message || 'Не удалось добавить в избранное';
+  }
 }
 
 const openTaskDetail = async (task) => {
@@ -339,7 +535,7 @@ onMounted(async () => {
     });
 
     status.value = 'Подключено';
-    await refreshRemarksBadge();
+    await loadView();
   } catch (error) {
     status.value = 'Недоступен';
     errorText.value = `Не удалось подключиться к backend: ${error.message}`;
@@ -362,25 +558,16 @@ onMounted(async () => {
 }
 
 .app-content {
+  display: flex;
+  flex-direction: column;
   max-width: 100%;
+  min-height: calc(100vh - 64px);
 }
 
 @media (min-width: 1280px) {
   .app-content {
     max-width: 1200px;
   }
-}
-
-.column-card {
-  min-height: 420px;
-}
-
-.column-body {
-  min-height: 340px;
-}
-
-.task-card-main {
-  cursor: pointer;
 }
 
 .task-detail-drawer :deep(.v-navigation-drawer__content) {

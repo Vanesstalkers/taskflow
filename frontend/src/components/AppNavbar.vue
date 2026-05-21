@@ -58,6 +58,24 @@
       </v-list>
     </v-menu>
 
+    <v-select
+      v-model="selectedCollection"
+      class="app-navbar__collections ms-2"
+      :items="searchableCollections"
+      item-title="title"
+      item-value="collection"
+      label="Реестры"
+      density="compact"
+      variant="solo-filled"
+      flat
+      rounded
+      hide-details
+      clearable
+      :loading="collectionsLoading"
+      prepend-inner-icon="mdi-database-search-outline"
+      @update:model-value="onCollectionSelected"
+    />
+
     <v-spacer />
 
     <v-switch
@@ -94,9 +112,20 @@ const props = defineProps({
   status: { type: String, default: '' },
   devMode: { type: Boolean, default: false },
   remarksBadgeCount: { type: Number, default: 0 },
+  searchableCollections: { type: Array, default: () => [] },
+  collectionsLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:devMode', 'open-remarks', 'create-task', 'pick-task', 'pick-entity']);
+const emit = defineEmits([
+  'update:devMode',
+  'open-remarks',
+  'create-task',
+  'pick-task',
+  'pick-entity',
+  'open-collection-list',
+]);
+
+const selectedCollection = ref(null);
 
 const devModeModel = computed({
   get: () => props.devMode,
@@ -159,11 +188,12 @@ function pickItem(group, item) {
   query.value = '';
   groups.value = [];
   closeMenu();
+  const groupTitle = groupLabel(group);
   if (group.kind === 'task') {
-    emit('pick-task', code);
+    emit('pick-task', { code, title: item.title, groupTitle });
     return;
   }
-  emit('pick-entity', { collection: group.collection, code, title: item.title });
+  emit('pick-entity', { collection: group.collection, code, title: item.title, groupTitle });
 }
 
 function pickFirst() {
@@ -174,6 +204,16 @@ function pickFirst() {
       return;
     }
   }
+}
+
+function onCollectionSelected(collection) {
+  if (!collection) return;
+  const item = props.searchableCollections.find((c) => c.collection === collection);
+  emit('open-collection-list', {
+    collection,
+    title: item?.title || collection,
+  });
+  selectedCollection.value = null;
 }
 
 watch(
@@ -196,6 +236,12 @@ watch(
   flex: 1 1 280px;
   max-width: 520px;
   min-width: 160px;
+}
+
+.app-navbar__collections {
+  flex: 0 1 200px;
+  max-width: 220px;
+  min-width: 140px;
 }
 
 .app-navbar__search {

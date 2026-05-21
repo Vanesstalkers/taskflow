@@ -175,8 +175,7 @@ async function uploadOneFile(file) {
   await saveField({
     collection: props.collection,
     _id: recordId,
-    field: props.field,
-    value: next,
+    data: { [props.field]: next },
   });
   fileName.value = next;
   lastCommitted.value = next;
@@ -279,8 +278,7 @@ async function clearStoredFile() {
     await saveField({
       collection: props.collection,
       _id: recordId,
-      field: props.field,
-      value: '',
+      data: { [props.field]: '' },
     });
     pickedFile.value = null;
     fileName.value = '';

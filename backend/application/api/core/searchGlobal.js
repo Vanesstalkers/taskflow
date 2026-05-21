@@ -9,16 +9,6 @@
     const perGroupLimit = Math.min(Math.max(limit, 1), 20);
     const groups = [];
 
-    const mapDocumentsToItems = (documents, searchFields) =>
-      documents.map((document) => {
-        const code = String(document._id);
-        const parts = searchFields
-          .map((field) => document[field])
-          .filter((v) => v !== null && String(v).trim() !== '');
-        const title = parts.length > 0 ? parts.map((v) => String(v).trim()).join(' · ') : code;
-        return { code, title };
-      });
-
     const taskDocuments = await db.mongodb.find(
       'task',
       {
@@ -70,7 +60,10 @@
         kind: 'collection',
         collection,
         title: domain.collections[collection].title || collection,
-        items: mapDocumentsToItems(documents, searchFields),
+        items: documents.map((document) => ({
+          code: String(document._id),
+          title: domain.collections.utils.searchItemTitle.fromDocument(collection, document),
+        })),
       });
     }
 

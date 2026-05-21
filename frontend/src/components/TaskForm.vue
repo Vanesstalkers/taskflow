@@ -21,9 +21,20 @@
           </v-chip>
         </div>
       </div>
-      <v-btn variant="text" density="comfortable" icon class="flex-shrink-0" @click="$emit('close')">
-        <v-icon>mdi-close</v-icon>
-      </v-btn>
+      <div class="d-flex flex-shrink-0 ga-1">
+        <v-btn
+          variant="text"
+          density="comfortable"
+          icon
+          aria-label="В избранное"
+          @click="$emit('add-favourite')"
+        >
+          <v-icon>mdi-star-plus-outline</v-icon>
+        </v-btn>
+        <v-btn variant="text" density="comfortable" icon aria-label="Закрыть" @click="$emit('close')">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </div>
     </div>
     <div class="d-flex align-center flex-wrap ga-2 mb-4">
       <v-btn
@@ -172,7 +183,7 @@ const props = defineProps({
   movingTaskId: { type: String, default: '' },
 });
 
-defineEmits(['close', 'move']);
+defineEmits(['close', 'move', 'add-favourite']);
 
 const taskMainComponent = computed(() => resolveTaskTypeMainComponent(props.task?.taskType));
 

@@ -135,7 +135,7 @@ async function persist() {
   saveError.value = '';
   try {
     const { collection, _id, field } = props;
-    await saveField({ collection, _id, field, value: next });
+    await saveField({ collection, _id, data: { [field]: next } });
     lastCommitted.value = next;
     flashSuccess();
   } catch (error) {

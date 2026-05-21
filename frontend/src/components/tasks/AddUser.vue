@@ -170,11 +170,11 @@
                         field="phoneType"
                         :context-key="`${phoneId}:phoneType`"
                       />
-                      <Input
-                        v-model="phoneRecord.number"
+                      <Phone
+                        v-model:code="phoneRecord.code"
+                        v-model:number="phoneRecord.number"
                         collection="phone"
                         :_id="phoneId"
-                        field="number"
                         label="Номер"
                         :context-key="phoneId"
                       />
@@ -203,6 +203,7 @@ import { computed, onMounted } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import InputFile from '../InputFile.vue';
+import Phone from '../Phone.vue';
 import Radio from '../Radio.vue';
 import Select from '../Select.vue';
 import { useStore } from '../../stores/store.js';

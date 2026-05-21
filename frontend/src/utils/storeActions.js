@@ -52,7 +52,7 @@ function assertUpdateFieldOk(result) {
 
 /**
  * Общий вызов backend/application/api/core/updateField.js (Metacom api.core.updateField).
- * @param {{ _id: string, collection: string, field: string, value: unknown }} params
+ * @param {{ _id: string, collection: string, data: Record<string, unknown>, taskType?: string }} params
  */
 export async function saveField(params) {
   const api = getApi();
@@ -60,9 +60,10 @@ export async function saveField(params) {
   if (!method) {
     throw new Error('API updateField недоступен');
   }
-  const { collection, _id, field, value } = params;
-  const taskType = getStoreBuckets().task[_id]?.taskType;
-  const result = await method({ collection, _id, field, value, taskType });
+  const { collection, _id, data, taskType: taskTypeParam } = params;
+  const buckets = getStoreBuckets();
+  const taskType = taskTypeParam ?? buckets?.task?.[_id]?.taskType;
+  const result = await method({ collection, _id, data, taskType });
   assertUpdateFieldOk(result);
   return result;
 }

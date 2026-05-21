@@ -34,7 +34,8 @@ defineOptions({ inheritAttrs: false });
 
 const OUTLINE_FLASH_MS = 2000;
 
-const text = defineModel({ type: String, default: '' });
+const raw = defineModel({ type: String, default: '' });
+const text = ref('');
 
 const props = defineProps({
   /** Идентификатор документа (не нужен при ephemeral) */
@@ -54,11 +55,16 @@ const props = defineProps({
   ephemeral: { type: Boolean, default: false },
   /** Внешний индикатор загрузки (например создание связанного документа) */
   loading: { type: Boolean, default: false },
+  /** Отображение в поле, на сервер уходит результат parseValue */
+  formatDisplay: { type: Function, default: null },
+  parseValue: { type: Function, default: null },
+  /** Не подсвечивать обёртку — родитель (например Phone) показывает outline */
+  suppressOutline: { type: Boolean, default: false },
 });
 
 const devAnchorId = useDevAnchorId(props);
 
-const emit = defineEmits(['commit']);
+const emit = defineEmits(['commit', 'save-success', 'save-error']);
 
 const saving = ref(false);
 const saveError = ref('');
@@ -79,6 +85,10 @@ function clearOutlineFlash() {
 }
 
 function flashSuccess() {
+  if (props.suppressOutline) {
+    emit('save-success');
+    return;
+  }
   showErrorOutline.value = false;
   clearTimeout(errorOutlineTimer);
   errorOutlineTimer = null;
@@ -91,6 +101,10 @@ function flashSuccess() {
 }
 
 function flashError() {
+  if (props.suppressOutline) {
+    emit('save-error', saveError.value);
+    return;
+  }
   showSuccessOutline.value = false;
   clearTimeout(successOutlineTimer);
   successOutlineTimer = null;
@@ -102,14 +116,43 @@ function flashError() {
   }, OUTLINE_FLASH_MS);
 }
 
+function displayFromRaw(value) {
+  return props.formatDisplay ? props.formatDisplay(value) : String(value ?? '');
+}
+
+function valueFromDisplay(value) {
+  return props.parseValue ? props.parseValue(value) : String(value ?? '').trim();
+}
+
+function syncTextFromRaw() {
+  text.value = displayFromRaw(raw.value);
+}
+
 watch(
   () => props.contextKey,
   () => {
-    lastCommitted.value = String(text.value).trim();
+    syncTextFromRaw();
+    lastCommitted.value = valueFromDisplay(text.value);
     saveError.value = '';
     clearOutlineFlash();
   },
   { immediate: true },
+);
+
+watch(text, (val) => {
+  const parsed = valueFromDisplay(val);
+  if (parsed !== String(raw.value ?? '')) raw.value = parsed;
+  if (props.formatDisplay) {
+    const formatted = displayFromRaw(parsed);
+    if (formatted !== val) text.value = formatted;
+  }
+});
+
+watch(
+  () => raw.value,
+  (v) => {
+    if (valueFromDisplay(text.value) !== String(v ?? '')) syncTextFromRaw();
+  },
 );
 
 onUnmounted(() => {
@@ -124,7 +167,7 @@ async function persist() {
     return;
   }
 
-  const next = String(text.value).trim();
+  const next = valueFromDisplay(text.value);
   if (next === lastCommitted.value) return;
 
   if (!props._id) {
@@ -137,7 +180,9 @@ async function persist() {
   saveError.value = '';
   try {
     const { collection, _id, field } = props;
-    await saveField({ collection, _id, field, value: next });
+    await saveField({ collection, _id, data: { [field]: next } });
+    raw.value = next;
+    syncTextFromRaw();
     lastCommitted.value = next;
     flashSuccess();
   } catch (error) {

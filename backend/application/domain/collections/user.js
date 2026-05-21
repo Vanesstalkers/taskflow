@@ -6,7 +6,7 @@
     login: '',
     password: {
       hidden: true,
-      onUpdate: async (password) => await metarhia.metautil.hashPassword(password),
+      onUpdate: async (value) => await metarhia.metautil.hashPassword(value),
     },
     userRoleList: {
       collection: 'userRole',
@@ -15,6 +15,9 @@
     ppList: {
       collection: 'pp',
       schema: domain.collections.pp.schema(),
+    },
+    workspaceTabs: {
+      hidden: true,
     },
   }),
 });

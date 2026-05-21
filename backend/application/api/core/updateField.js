@@ -1,45 +1,41 @@
 ({
   access: 'public',
-  method: async ({ collection, _id, field, value, taskType }) => {
-    if (typeof collection !== 'string' || collection.length === 0) {
-      throw new Error('Parameter "collection" must be a non-empty string');
-    }
-    const validCollection = /^[a-zA-Z0-9_-]+$/.test(collection);
-    if (!validCollection) {
-      throw new Error('Invalid collection name');
-    }
-    if (typeof _id !== 'string' || _id.length === 0) {
-      throw new Error('Parameter "id" must be a non-empty string');
-    }
-    if (typeof field !== 'string' || field.length === 0) {
-      throw new Error('Parameter "field" must be a non-empty string');
-    }
-    const validField = /^[a-zA-Z0-9_.-]+$/.test(field);
-    if (!validField) {
-      throw new Error('Invalid field name');
-    }
+  method: async ({ collection, _id, data, taskType }) => {
+    const schema = taskType
+      ? domain.collections.task[taskType].schema()
+      : domain.collections[collection].schema();
 
-    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema();
-    if (schema?.[field]?.onUpdate) value = await schema[field].onUpdate(value);
-
-    const data = { collection, _id, field, value, taskType };
-    await domain.collections.utils.ensureUniqueKeys.assertForFieldUpdate(data);
+    const setPayload = {};
+    for (const [fieldName, fieldValue] of Object.entries(data)) {
+      let normalized = fieldValue;
+      if (schema?.[fieldName]?.onUpdate) {
+        normalized = await schema[fieldName].onUpdate(fieldValue);
+      }
+      setPayload[fieldName] = normalized;
+      await domain.collections.utils.ensureUniqueKeys.assertForFieldUpdate({
+        collection,
+        _id,
+        field: fieldName,
+        value: normalized,
+        taskType,
+      });
+    }
 
     const updatedAt = new Date();
-    const result = await db.mongodb.updateOne(
+    await db.mongodb.updateOne(
       collection,
       { _id: new npm.mongodb.ObjectId(_id) },
-      { $set: { [field]: value, updatedAt } },
+      {
+        $set: { ...setPayload, updatedAt },
+        $setOnInsert: { createdAt: updatedAt },
+      },
+      { upsert: true },
     );
-
-    if (result.matchedCount === 0) {
-      throw new Error('Object not found');
-    }
 
     context.client.emit('core/updateStore', {
       [collection]: {
         [_id]: {
-          [field]: value,
+          ...setPayload,
           updatedAt,
           ...domain.collections.utils.getHiddenFields({ collection, taskType }),
         },

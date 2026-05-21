@@ -57,7 +57,7 @@ description: >-
 
 ## Где лежит общая логика RPC
 
-- `frontend/src/utils/storeActions.js` — **`saveField`** → `api.core.updateField`, **`updateLink`** → `api.core.updateLink`, **`addObject`** → `api.core.addObject`; проверка `status === 'ok'`.
+- `frontend/src/utils/storeActions.js` — **`saveField`** → `api.core.updateField` с объектом **`data: { [имяПоля]: value, … }`** (одно или несколько полей за запрос), **`updateLink`** → `api.core.updateLink`, **`addObject`** → `api.core.addObject`; проверка `status === 'ok'`.
 - Подписка на патчи стора: **`subscribeStoreUpdates`** (`api.core.on('updateStore', …)`). После успешных RPC сервер шлёт `core/updateStore`; отдельно дублировать обновление Pinia из каждого нового виджета не нужно, если сохранение идёт через эти пути.
 
 ## Какие компоненты использовать

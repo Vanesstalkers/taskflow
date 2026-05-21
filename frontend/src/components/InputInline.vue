@@ -5,14 +5,19 @@
     :class="{
       'inline-edit-text--success': showSuccessOutline,
       'inline-edit-text--error': showErrorOutline,
+      'inline-edit-text--with-label': reserveLabelSpace,
     }"
   >
+    <div v-if="reserveLabelSpace && !editing" class="inline-edit-text__static-label">
+      {{ fieldLabelText }}
+    </div>
     <v-text-field
       v-if="editing"
       ref="inputRef"
       v-model="draft"
-      density="compact"
-      variant="outlined"
+      :label="fieldLabelDisplay"
+      :density="editDensity"
+      :variant="editVariant"
       hide-details="auto"
       class="inline-edit-text__field"
       :class="inputClass"
@@ -28,11 +33,12 @@
       :is="displayTag"
       v-else
       class="inline-edit-text__display text-break"
-      :class="displayClass"
+      :class="[displayClass, { 'inline-edit-text__display--placeholder': isPlaceholderDisplay }]"
       tabindex="0"
-      role="button"
+      role="textbox"
       :title="hint"
       @click="startEdit"
+      @focus="startEdit"
       @keydown.enter.prevent="startEdit"
       @keydown.space.prevent="startEdit"
     >
@@ -76,11 +82,28 @@ const props = defineProps({
   errorMessage: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку и внутренние ошибки сохранения */
   contextKey: { type: String, default: '' },
+  formatDisplay: { type: Function, default: null },
+  parseValue: { type: Function, default: null },
+  /** Вариант поля в режиме редактирования (v-text-field) */
+  editVariant: { type: String, default: 'outlined' },
+  editDensity: { type: String, default: 'compact' },
+  /** Подпись поля (пустая строка — зарезервировать место под v-label) */
+  fieldLabel: { type: String, default: '' },
+  /** Зарезервировать строку подписи (как у v-text-field label) */
+  reserveLabelSpace: { type: Boolean, default: false },
+  suppressOutline: { type: Boolean, default: false },
 });
+
+const fieldLabelText = computed(() => {
+  const t = String(props.fieldLabel ?? '').trim();
+  return t !== '' ? t : '\u00a0';
+});
+
+const fieldLabelDisplay = computed(() => fieldLabelText.value);
 
 const devAnchorId = useDevAnchorId(props);
 
-const emit = defineEmits(['saved', 'update:modelValue']);
+const emit = defineEmits(['saved', 'update:modelValue', 'save-success', 'save-error']);
 
 const editing = ref(false);
 const draft = ref('');
@@ -105,6 +128,10 @@ function clearAllOutlines() {
 }
 
 function startSuccessOutline() {
+  if (props.suppressOutline) {
+    emit('save-success');
+    return;
+  }
   showErrorOutline.value = false;
   clearTimeout(errorOutlineTimer);
   errorOutlineTimer = null;
@@ -118,6 +145,10 @@ function startSuccessOutline() {
 }
 
 function startErrorOutline() {
+  if (props.suppressOutline) {
+    emit('save-error', combinedError.value);
+    return;
+  }
   showSuccessOutline.value = false;
   clearTimeout(successOutlineTimer);
   successOutlineTimer = null;
@@ -142,22 +173,32 @@ onUnmounted(() => {
   clearAllOutlines();
 });
 
+function displayFromRaw(value) {
+  return props.formatDisplay ? props.formatDisplay(value) : String(value ?? '');
+}
+
+function valueFromDisplay(value) {
+  return props.parseValue ? props.parseValue(value) : String(value ?? '').trim();
+}
+
+const isPlaceholderDisplay = computed(() => String(props.modelValue ?? '').trim() === '');
+
 const displayText = computed(() => {
-  const v = props.modelValue;
-  return v != null && String(v).trim() !== '' ? v : props.emptyLabel;
+  const formatted = displayFromRaw(props.modelValue);
+  return formatted !== '' ? formatted : props.emptyLabel;
 });
 
 watch(
   () => props.modelValue,
   (value) => {
-    if (!editing.value) draft.value = value ?? '';
+    if (!editing.value) draft.value = displayFromRaw(value);
   },
 );
 
 const startEdit = async () => {
   if (props.disabled || saving.value || editing.value) return;
   saveErrorInternal.value = '';
-  draft.value = props.modelValue ?? '';
+  draft.value = displayText.value;
   editing.value = true;
   await nextTick();
   const field = inputRef.value;
@@ -176,8 +217,8 @@ const cancelEdit = () => {
 
 const finishEdit = async () => {
   if (!editing.value || saving.value) return;
-  const next = String(draft.value).trim();
-  const prev = String(props.modelValue ?? '').trim();
+  const next = valueFromDisplay(draft.value);
+  const prev = valueFromDisplay(displayFromRaw(props.modelValue));
   editing.value = false;
   if (next === prev) return;
 
@@ -197,7 +238,7 @@ const finishEdit = async () => {
   saving.value = true;
   try {
     const { collection, _id, field } = props;
-    await saveField({ collection, _id, field, value: next });
+    await saveField({ collection, _id, data: { [field]: next } });
     emit('update:modelValue', next);
     emit('saved', { value: next });
     startSuccessOutline();
@@ -213,6 +254,23 @@ defineExpose({ cancelEdit });
 </script>
 
 <style scoped>
+.inline-edit-text--with-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.inline-edit-text__static-label {
+  flex: 0 0 auto;
+  min-height: 16px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.0333333333em;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
 .inline-edit-text__display {
   cursor: pointer;
   margin: 0;
@@ -222,6 +280,10 @@ defineExpose({ cancelEdit });
   margin-left: -4px;
   outline: none;
   transition: outline 0.15s ease, outline-offset 0.15s ease;
+}
+
+.inline-edit-text__display--placeholder {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .inline-edit-text__display:hover {

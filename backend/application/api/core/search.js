@@ -10,16 +10,6 @@
     const projection = { _id: 1 };
     for (const field of searchFields) projection[field] = 1;
 
-    const mapDocumentsToItems = (documents) =>
-      documents.map((document) => {
-        const code = String(document._id);
-        const parts = searchFields
-          .map((field) => document[field])
-          .filter((v) => v !== null && String(v).trim() !== '');
-        const title = parts.length > 0 ? parts.map((v) => String(v).trim()).join(' · ') : code;
-        return { code, title };
-      });
-
     const query = {
       $or: searchFields.map((field) => ({
         [field]: { $regex: search, $options: 'i' },
@@ -31,6 +21,13 @@
       limit: Math.min(Math.max(limit, 1), 100),
     });
 
-    return { items: mapDocumentsToItems(documents), currentUserId, collection };
+    return {
+      items: documents.map((document) => ({
+        code: String(document._id),
+        title: domain.collections.utils.searchItemTitle.fromDocument(collection, document),
+      })),
+      currentUserId,
+      collection,
+    };
   },
 });
