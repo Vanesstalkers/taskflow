@@ -79,7 +79,7 @@
           }"
           :texts="{
             emptyText: 'Исполнители не выбраны',
-            addPlaceholder: 'Поиск по имени или логину (от 3 символов)',
+            addPlaceholder: 'Поиск по логину (от 3 символов)',
           }"
           :add="{ addType: 'search', showCreateNewOption: false, minSelection: 1 }"
           :status="{

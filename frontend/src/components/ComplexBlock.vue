@@ -1,11 +1,27 @@
 <template>
   <div class="multi-entity-picker" :data-dev-id="devAnchorId">
+    <button
+      v-if="showCollapsibleHeader"
+      type="button"
+      class="multi-entity-picker__block-title text-subtitle-2 text-high-emphasis mb-2"
+      :aria-expanded="blockExpanded ? 'true' : 'false'"
+      :aria-label="blockExpanded ? `Свернуть: ${blockTitleDisplay}` : `Развернуть: ${blockTitleDisplay}`"
+      @click="toggleBlockExpanded"
+    >
+      <v-icon
+        :icon="blockExpanded ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+        size="small"
+        class="multi-entity-picker__block-title-icon"
+      />
+      <span>{{ blockTitleDisplay }}</span>
+    </button>
     <div
-      v-if="showBlockTitle"
+      v-else-if="showBlockTitle"
       class="multi-entity-picker__block-title text-subtitle-2 text-high-emphasis mb-2"
     >
       {{ blockTitleDisplay }}
     </div>
+    <div v-show="isBlockBodyVisible" class="multi-entity-picker__body">
     <div class="multi-entity-picker__labels d-flex flex-wrap ga-2 align-center mb-3">
       <span v-if="selectedKeys.length === 0" class="text-body-2 text-medium-emphasis align-self-center">
         {{ flat.emptyText }}
@@ -51,7 +67,7 @@
           size="small"
           class="multi-entity-picker__add-trigger"
           :disabled="flat.disabled || addingKey !== null || removingKey !== null"
-          :loading="mergedLoading || addingKey !== null"
+          :loading="flat.loading || addingKey !== null"
           aria-label="Добавить"
           @click="openAddField"
         />
@@ -88,8 +104,10 @@
           picker-class="multi-entity-picker__add"
           sync-menu
           use-custom-item-row
-          :items="addFieldItems"
-          :loading="mergedLoading || addingKey !== null"
+          :items="addFieldStaticItems"
+          :search-collection="effectiveRemoteSearch ? entityStoreCollection : ''"
+          :search-preserve-ids="selectedKeys"
+          :loading="flat.loading || addingKey !== null"
           :error="flat.error"
           :error-messages="flat.errorMessages"
           :item-title="flat.itemTitle"
@@ -112,7 +130,7 @@
           :placeholder="flat.addPlaceholder"
           autocomplete="off"
           :disabled="flat.disabled || addingKey !== null || removingKey !== null"
-          :context-key="`${String(flat.contextKey || flat.parentId || '')}:separate-create-input`"
+          :context-key="`${flat.contextKey}:separate-create-input`"
           @commit="runCreateNew"
         />
         <v-btn
@@ -135,7 +153,7 @@
           :multiple="flat.addFileMultiple"
           :create-linked-document="createLinkedDocument"
           :disabled="flat.disabled || addingKey !== null || removingKey !== null"
-          :context-key="`${String(flat.contextKey || flat.parentId || '')}:add-file`"
+          :context-key="`${flat.contextKey}:add-file`"
         />
         </div>
       </template>
@@ -157,16 +175,22 @@
       density="comfortable"
       :single-line="false"
       hide-selection-chips
-      :items="effectiveItems"
-      :loading="mergedLoading"
+      :items="addFieldStaticItems"
+      :search-collection="effectiveRemoteSearch ? entityStoreCollection : ''"
+      :search-preserve-ids="selectedKeys"
+      :loading="flat.loading"
       :error="flat.error"
       :error-messages="flat.errorMessages"
       :item-title="flat.itemTitle"
       :item-value="flat.itemValue"
       :label="flat.pickerLabel"
+      :placeholder="flat.addPlaceholder"
       :disabled="flat.disabled"
+      :show-create-new-option="flat.showCreateNewOption"
+      :create-new-sentinel="ADD_CREATE_NEW_VALUE"
       @update:model-value="onNonLinkSelectionUpdate"
     />
+    </div>
   </div>
 
   <teleport to="body">
@@ -210,7 +234,6 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { getApi } from '../main.js';
 import { addObject as callAddObject, updateLink as callUpdateLink } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
 import Input from './Input.vue';
@@ -305,8 +328,6 @@ const addMenuOpen = ref(false);
 const addFieldRef = ref(null);
 const createInputRef = ref(null);
 
-const remoteOptions = ref([]);
-const internalLoading = ref(false);
 
 function obj(x) {
   return x && typeof x === 'object' && !Array.isArray(x) ? x : {};
@@ -334,7 +355,7 @@ const flat = computed(() => {
     parentCollection: String(persist.parentCollection ?? '').trim(),
     parentId: String(persist.parentId ?? '').trim(),
     linkField: String(persist.linkField ?? '').trim(),
-    contextKey: String(persist.contextKey ?? '').trim(),
+    contextKey: String(persist.contextKey || persist.parentId || '').trim(),
 
     listItemsRaw: Array.isArray(list.items) ? list.items : [],
     listLstName: String(list.lstName ?? '').trim(),
@@ -372,11 +393,24 @@ const flat = computed(() => {
 
     disabled: Boolean(ui.disabled),
     fullWidthLabels: Boolean(ui.fullWidthLabels ?? true),
+    collapsible: ui.collapsible !== false,
+    defaultCollapsed: Boolean(ui.defaultCollapsed),
   };
 });
 
 const blockTitleDisplay = computed(() => String(flat.value.blockTitle || '').trim());
 const showBlockTitle = computed(() => blockTitleDisplay.value.length > 0);
+const showCollapsibleHeader = computed(() => showBlockTitle.value && flat.value.collapsible);
+
+const blockExpanded = ref(true);
+
+const isBlockBodyVisible = computed(
+  () => !showCollapsibleHeader.value || blockExpanded.value,
+);
+
+function toggleBlockExpanded() {
+  blockExpanded.value = !blockExpanded.value;
+}
 
 const linkParentCollection = computed(() => flat.value.parentCollection);
 const linkParentId = computed(() => flat.value.parentId);
@@ -465,8 +499,6 @@ const isAddBlocked = computed(
 /** Показ всех контролов добавления связи (кнопка «+» и полоска); скрывается целиком при достижении maxSelection */
 const canAddMoreLinks = computed(() => linkPersistEnabled.value && !isAddBlocked.value);
 
-const mergedLoading = computed(() => flat.value.loading || internalLoading.value);
-
 const catalogItems = computed(() => {
   const raw = flat.value.listItemsRaw;
   if (Array.isArray(raw) && raw.length > 0) return raw;
@@ -476,11 +508,9 @@ const catalogItems = computed(() => {
   return Array.isArray(arr) ? arr : [];
 });
 
-const effectiveItems = computed(() => (effectiveRemoteSearch.value ? remoteOptions.value : catalogItems.value));
-
 const pickRadioItems = computed(() => {
   if (!flat.value.pickCreatesDocument || resolvedAddType.value !== 'radio') return [];
-  const items = effectiveItems.value;
+  const items = catalogItems.value;
   return Array.isArray(items) ? items : [];
 });
 
@@ -492,8 +522,9 @@ const showPickRadioGroup = computed(
     pickRadioItems.value.length > 0,
 );
 
-const addFieldItems = computed(() => {
-  const base = effectiveItems.value;
+/** Статические пункты add-поля; при search список сущностей грузит Select. */
+const addFieldStaticItems = computed(() => {
+  const base = effectiveRemoteSearch.value ? [] : catalogItems.value;
   if (!flat.value.showCreateNewOption) return base;
   if (
     showSeparateCreateButton.value &&
@@ -511,6 +542,8 @@ const addFieldItems = computed(() => {
   return [createRow, ...base];
 });
 
+const effectiveItems = computed(() => catalogItems.value);
+
 /** Строка опции: сначала `itemTitle`, иначе типичные текстовые поля записи, иначе `_id` / ключ значения */
 function pickerRow(record, id) {
   const tk = flat.value.itemTitle;
@@ -522,12 +555,6 @@ function pickerRow(record, id) {
   }
   const title = String(raw.login || '').trim() || String(id);
   return { [tk]: title, [vk]: String(id) };
-}
-
-function idFromSearchRow(row) {
-  if (!row || typeof row !== 'object') return '';
-  const vk = flat.value.itemValue;
-  return String(row._id ?? row[vk] ?? '').trim();
 }
 
 async function runPickCreatesDocumentAdd(pickId) {
@@ -580,78 +607,6 @@ function getEntityBucket() {
   return globalStore.store[name];
 }
 
-function appendSelectedKeysToItems(items) {
-  const vk = flat.value.itemValue;
-  const map = new Map();
-  for (const item of items) {
-    const raw = item?.raw ?? item;
-    const id = raw != null && typeof raw === 'object' && raw[vk] != null && raw[vk] !== '' ? raw[vk] : item?.[vk];
-    if (id == null || id === '') continue;
-    map.set(String(id), item);
-  }
-  const bucket = getEntityBucket();
-  for (const selectedId of selectedKeys.value) {
-    const key = String(selectedId);
-    if (map.has(key)) continue;
-    const record = bucket[key];
-    if (!record) continue;
-    map.set(key, pickerRow(record, key));
-  }
-  return Array.from(map.values());
-}
-
-async function syncRemoteSearchOptions(rawSearch = '') {
-  if (!effectiveRemoteSearch.value) return;
-  const searchMethod = getApi()?.core?.search;
-  const search = typeof rawSearch === 'string' ? rawSearch.trim() : '';
-  const collection = entityStoreCollection.value;
-
-  if (!search || search.length < 3) {
-    if (collection === 'user') {
-      const sid = String(globalStore.currentUserId || '').trim();
-      const bucket = getEntityBucket();
-      const baseline = sid && bucket ? bucket[sid] : null;
-      const items = baseline ? [pickerRow(baseline, sid)] : [];
-      remoteOptions.value = appendSelectedKeysToItems(items);
-    } else {
-      remoteOptions.value = appendSelectedKeysToItems([]);
-    }
-    return;
-  }
-
-  if (!searchMethod) return;
-  internalLoading.value = true;
-  try {
-    const response = await searchMethod({ collection, search, limit: 20 });
-    const rows = Array.isArray(response?.items) ? response.items : [];
-    const items = rows
-      .map((row) => {
-        const id = idFromSearchRow(row);
-        return id ? pickerRow(row, id) : null;
-      })
-      .filter(Boolean);
-    remoteOptions.value = appendSelectedKeysToItems(items);
-    const bucket = getEntityBucket();
-    for (const row of rows) {
-      const id = idFromSearchRow(row);
-      if (!id) continue;
-      bucket[id] = { ...row, _id: id };
-    }
-  } catch {
-    // оставляем предыдущий список при временных сбоях
-  } finally {
-    internalLoading.value = false;
-  }
-}
-
-watch(
-  () => search.value,
-  async (value) => {
-    if (!effectiveRemoteSearch.value) return;
-    await syncRemoteSearchOptions((value || '').trim());
-  },
-);
-
 watch(
   selectedKeys,
   () => {
@@ -683,12 +638,12 @@ onMounted(() => {
   if (addPlacementResolved.value === 'inline') {
     addExpanded.value = true;
   }
-  if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
 });
 
 watch(
-  () => flat.value.contextKey,
+  () => [flat.value.contextKey, flat.value.defaultCollapsed],
   () => {
+    blockExpanded.value = !flat.value.defaultCollapsed;
     pendingCreateFromStore.value = false;
     if (pendingCreateResolve) {
       pendingCreateResolve.reject(new Error('Сброс контекста'));
@@ -700,16 +655,9 @@ watch(
     radioPickValue.value = null;
     addExpanded.value = addPlacementResolved.value === 'inline';
     addMenuOpen.value = false;
-    if (effectiveRemoteSearch.value) syncRemoteSearchOptions('');
   },
+  { immediate: true },
 );
-
-watch(showAddSlot, (open) => {
-  if (open && effectiveRemoteSearch.value) {
-    const s = (search.value || '').trim();
-    void syncRemoteSearchOptions(s.length >= 3 ? s : '');
-  }
-});
 
 watch(isAddBlocked, (blocked) => {
   if (!blocked) return;
@@ -1048,6 +996,30 @@ function onNonLinkSelectionUpdate(next) {
 .multi-entity-picker {
   margin-top: 10px;
   margin-bottom: 10px;
+}
+
+button.multi-entity-picker__block-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+button.multi-entity-picker__block-title:hover {
+  opacity: 0.85;
+}
+
+.multi-entity-picker__block-title-icon {
+  flex-shrink: 0;
+  opacity: 0.72;
 }
 
 .multi-entity-picker__label {

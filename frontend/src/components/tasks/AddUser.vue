@@ -70,128 +70,7 @@
               <span>{{ record?.type || roleId }}</span>
             </template>
           </ComplexBlock>
-          <ComplexBlock
-            v-if="_id"
-            :model-value="ppListKeyList(_id)"
-            :persist="{
-              collection: 'pp',
-              parentCollection: 'user',
-              parentId: _id,
-              linkField: 'ppList',
-              contextKey: _id,
-            }"
-            :add="{ addType: 'button', separateCreateButton: true, maxSelection: 1, minSelection: 1 }"
-            :texts="{
-              blockTitle: 'Персональные данные',
-              emptyText: 'Данные не добавлены',
-            }"
-          >
-            <template #label="{ _id: ppId, record = {} }">
-              <div class="d-flex flex-column ga-2 align-self-stretch w-100">
-                <Input
-                  v-model="record.lastName"
-                  collection="pp"
-                  :_id="ppId"
-                  field="lastName"
-                  label="Фамилия"
-                  :context-key="ppId"
-                />
-                <Input
-                  v-model="record.firstName"
-                  collection="pp"
-                  :_id="ppId"
-                  field="firstName"
-                  label="Имя"
-                  :context-key="ppId"
-                />
-                <Input
-                  v-model="record.middleName"
-                  collection="pp"
-                  :_id="ppId"
-                  field="middleName"
-                  label="Отчество"
-                  :context-key="ppId"
-                />
-                <Input
-                  v-model="record.birthDate"
-                  collection="pp"
-                  :_id="ppId"
-                  field="birthDate"
-                  label="Дата рождения"
-                  :context-key="ppId"
-                />
-                <Radio
-                  :model-value="record.gender"
-                  lst-name="genders"
-                  field-label="Пол"
-                  collection="pp"
-                  :_id="ppId"
-                  field="gender"
-                  pick-stored-as-empty="unspecified"
-                  empty-stored-value=""
-                  :context-key="`${ppId}:gender`"
-                />
-                <ComplexBlock
-                  v-if="ppId"
-                  :model-value="phoneListKeyList(ppId)"
-                  :list="{ lstName: 'phoneTypes' }"
-                  :persist="{
-                    collection: 'phone',
-                    parentCollection: 'pp',
-                    parentId: ppId,
-                    linkField: 'phoneList',
-                    contextKey: ppId,
-                  }"
-                  :add="{
-                    addType: 'select',
-                    addPlacement: 'inline',
-                    pickCreatesDocument: true,
-                    pickDocumentField: 'phoneType',
-                    showCreateNewOption: false,
-                  }"
-                  :ui="{ fullWidthLabels: true }"
-                  :texts="{
-                    blockTitle: 'Телефоны',
-                    emptyText: 'Телефоны не добавлены',
-                    addFieldLabel: 'Тип телефона',
-                    addPlaceholder: 'Выберите тип из списка',
-                  }"
-                >
-                  <template #label="{ _id: phoneId, record: phoneRecord = {} }">
-                    <div class="d-flex flex-column ga-2 align-self-stretch w-100">
-                      <Select
-                        :model-value="phoneRecord.phoneType || ''"
-                        lst-name="phoneTypes"
-                        label="Тип"
-                        density="comfortable"
-                        :single-line="false"
-                        collection="phone"
-                        :_id="phoneId"
-                        field="phoneType"
-                        :context-key="`${phoneId}:phoneType`"
-                      />
-                      <Phone
-                        v-model:code="phoneRecord.code"
-                        v-model:number="phoneRecord.number"
-                        collection="phone"
-                        :_id="phoneId"
-                        label="Номер"
-                        :context-key="phoneId"
-                      />
-                      <Checkbox
-                        :model-value="Boolean(phoneRecord?.active)"
-                        label="Активный"
-                        :_id="phoneId"
-                        collection="phone"
-                        field="active"
-                        :context-key="`${phoneId}:active`"
-                      />
-                    </div>
-                  </template>
-                </ComplexBlock>
-              </div>
-            </template>
-          </ComplexBlock>
+          <PP v-if="_id" :parent-id="_id" parent-collection="user" :show-fields="['*']" />
         </div>
       </template>
     </ComplexBlock>
@@ -203,11 +82,8 @@ import { computed, onMounted } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import InputFile from '../InputFile.vue';
-import Phone from '../Phone.vue';
-import Radio from '../Radio.vue';
-import Select from '../Select.vue';
+import PP from '../complex/PP.vue';
 import { useStore } from '../../stores/store.js';
-import Checkbox from '../Checkbox.vue';
 
 const props = defineProps({
   task: { type: Object, required: true },
@@ -219,14 +95,6 @@ onMounted(async () => {});
 
 function userRoleListKeyList(userId) {
   return Object.keys(globalStore.store.user?.[userId]?.userRoleList || {}).filter(Boolean);
-}
-
-function ppListKeyList(userId) {
-  return Object.keys(globalStore.store.user?.[userId]?.ppList || {}).filter(Boolean);
-}
-
-function phoneListKeyList(ppId) {
-  return Object.keys(globalStore.store.pp?.[ppId]?.phoneList || {}).filter(Boolean);
 }
 
 const createdUserIds = computed({

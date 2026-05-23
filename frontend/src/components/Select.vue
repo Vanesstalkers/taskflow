@@ -17,7 +17,7 @@
       :density="density"
       :single-line="singleLine"
       :items="resolvedItems"
-      :loading="loading || saving"
+      :loading="loading || searchLoading || saving"
       :error="error || !!saveError"
       :error-messages="saveError ? [saveError] : errorMessages"
       :item-title="itemTitle"
@@ -44,7 +44,8 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { getApi } from '../main.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
@@ -85,6 +86,12 @@ const props = defineProps({
   /** Полный devId из manifest; иначе `collection.field` */
   devId: { type: String, default: '' },
   contextKey: { type: String, default: '' },
+  /** Поиск по `api.core.search` в коллекции; items — только доп. пункты (напр. «Создать») */
+  searchCollection: { type: String, default: '' },
+  /** Id уже выбранных записей — подмешиваются из store[searchCollection] для подписи в списке */
+  searchPreserveIds: { type: Array, default: () => [] },
+  searchLimit: { type: Number, default: 20 },
+  searchMinLength: { type: Number, default: 3 },
 });
 
 const devAnchorId = useDevAnchorId(props);
@@ -114,14 +121,110 @@ const persistEnabled = computed(() => {
 
 const hasPlaceholder = computed(() => Boolean(String(props.placeholder || '').trim()));
 
-const resolvedItems = computed(() => {
+const remoteSearchEnabled = computed(() => Boolean(String(props.searchCollection || '').trim()));
+const searchCollectionName = computed(() => String(props.searchCollection || '').trim());
+
+const remoteItems = ref([]);
+const searchLoading = ref(false);
+
+function getSearchBucket() {
+  const name = searchCollectionName.value;
+  if (!name) return null;
+  if (!globalStore.store[name]) globalStore.store[name] = {};
+  return globalStore.store[name];
+}
+
+function pickerRow(record, id) {
+  const tk = props.itemTitle;
+  const vk = props.itemValue;
+  const raw = record && typeof record === 'object' ? record : {};
+  const primary = raw[tk];
+  if (primary != null && String(primary).trim() !== '') {
+    return { [tk]: String(primary), [vk]: String(id) };
+  }
+  const title = String(raw.login || '').trim() || String(id);
+  return { [tk]: title, [vk]: String(id) };
+}
+
+function idFromSearchRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  const vk = props.itemValue;
+  return String(row._id ?? row[vk] ?? '').trim();
+}
+
+function appendPreserveIds(items) {
+  const vk = props.itemValue;
+  const map = new Map();
+  for (const item of items) {
+    const raw = item?.raw ?? item;
+    const id = raw != null && typeof raw === 'object' && raw[vk] != null && raw[vk] !== '' ? raw[vk] : item?.[vk];
+    if (id == null || id === '') continue;
+    map.set(String(id), item);
+  }
+  const bucket = getSearchBucket();
+  if (!bucket) return Array.from(map.values());
+  for (const selectedId of props.searchPreserveIds) {
+    const key = String(selectedId);
+    if (map.has(key)) continue;
+    const record = bucket[key];
+    if (!record) continue;
+    map.set(key, pickerRow(record, key));
+  }
+  return Array.from(map.values());
+}
+
+async function syncRemoteSearchOptions(rawSearch = '') {
+  if (!remoteSearchEnabled.value) return;
+  const searchMethod = getApi()?.core?.search;
+  const query = typeof rawSearch === 'string' ? rawSearch.trim() : '';
+  const collection = searchCollectionName.value;
+  const minLen = Math.max(1, Number(props.searchMinLength) || 3);
+
+  if (!query || query.length < minLen) {
+    if (collection === 'user') {
+      const sid = String(globalStore.currentUserId || '').trim();
+      const bucket = getSearchBucket();
+      const baseline = sid && bucket ? bucket[sid] : null;
+      const items = baseline ? [pickerRow(baseline, sid)] : [];
+      remoteItems.value = appendPreserveIds(items);
+    } else {
+      remoteItems.value = appendPreserveIds([]);
+    }
+    return;
+  }
+
+  if (!searchMethod) return;
+  searchLoading.value = true;
+  try {
+    const response = await searchMethod({
+      collection,
+      search: query,
+      limit: Math.min(Math.max(Number(props.searchLimit) || 20, 1), 100),
+    });
+    const rows = Array.isArray(response?.items) ? response.items : [];
+    const items = rows
+      .map((row) => {
+        const id = idFromSearchRow(row);
+        return id ? pickerRow(row, id) : null;
+      })
+      .filter(Boolean);
+    remoteItems.value = appendPreserveIds(items);
+    // Ответ search — { code, title }; в store[collection] не пишем (см. mergeDeep / getStoreRecord).
+  } catch {
+    // оставляем предыдущий список
+  } finally {
+    searchLoading.value = false;
+  }
+}
+
+const staticItems = computed(() => {
   const vk = props.itemValue;
   const tk = props.itemTitle;
   let items = [];
   const direct = props.items;
   if (Array.isArray(direct) && direct.length > 0) {
     items = direct;
-  } else {
+  } else if (!remoteSearchEnabled.value) {
     const key = String(props.lstName || '').trim();
     if (key) {
       const raw = globalStore.lst[key];
@@ -134,6 +237,20 @@ const resolvedItems = computed(() => {
     items = [{ [tk]: match ? match[tk] : current, [vk]: current }, ...items];
   }
   return items;
+});
+
+const resolvedItems = computed(() => {
+  if (!remoteSearchEnabled.value) return staticItems.value;
+  const prefix = staticItems.value;
+  const seen = new Set(prefix.map((row) => String(row?.[props.itemValue] ?? '')));
+  const merged = [...prefix];
+  for (const row of remoteItems.value) {
+    const id = String(row?.[props.itemValue] ?? '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(row);
+  }
+  return merged;
 });
 
 const menuBind = computed(() => {
@@ -246,9 +363,33 @@ watch(
 watch(menu, (open) => {
   if (open && props.syncMenu) {
     search.value = '';
+    if (remoteSearchEnabled.value) {
+      void syncRemoteSearchOptions('');
+    }
     return;
   }
   if (!open) syncSearchInputFromModel();
+});
+
+watch(
+  () => search.value,
+  (value) => {
+    if (!remoteSearchEnabled.value) return;
+    void syncRemoteSearchOptions((value || '').trim());
+  },
+);
+
+watch(
+  () => [props.searchPreserveIds, props.searchCollection, props.contextKey],
+  () => {
+    if (!remoteSearchEnabled.value) return;
+    void syncRemoteSearchOptions((search.value || '').trim());
+  },
+  { deep: true },
+);
+
+onMounted(() => {
+  if (remoteSearchEnabled.value) void syncRemoteSearchOptions((search.value || '').trim());
 });
 
 onUnmounted(() => {

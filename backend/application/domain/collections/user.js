@@ -12,7 +12,7 @@
       collection: 'userRole',
       schema: domain.collections.userRole.schema(),
     },
-    ppList: {
+    pp: {
       collection: 'pp',
       schema: domain.collections.pp.schema(),
     },

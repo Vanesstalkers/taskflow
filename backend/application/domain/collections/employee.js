@@ -1,5 +1,7 @@
 ({
-  schema: () => ({
+  searchLabel: 'Сотрудники',
+  searchFields: ['position'],
+  schema: ({ ignore = [] } = {}) => ({
     position: '',
     positionType: { lst: 'jobTitles' },
     subdivision: {
@@ -10,5 +12,13 @@
       collection: 'pp',
       schema: domain.collections.pp.schema(),
     },
+    manager: ignore.includes('manager')
+      ? null
+      : {
+          collection: 'employee',
+          schema: {
+            ...domain.collections.employee.schema({ ignore: ['manager'] }),
+          },
+        },
   }),
 });

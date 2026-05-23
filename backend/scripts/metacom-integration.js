@@ -653,16 +653,16 @@ async function seedAddUserFull(client, ph, taskId, caches) {
     link: {
       collection: 'user',
       _id: childUserId,
-      linkField: 'ppList',
+      linkField: 'pp',
     },
   });
   assertOk(pres, 'addObject(pp)');
 
   ph.phase = 'getTask.afterPp';
   const d1 = await client.call('core', 'getTask', { _id: taskId });
-  const ppMap = d1?.store?.user?.[childUserId]?.ppList || {};
+  const ppMap = d1?.store?.user?.[childUserId]?.pp || {};
   const ppId = Object.keys(ppMap).filter(Boolean)[0];
-  assert(ppId, 'нет pp в ppList');
+  assert(ppId, 'нет pp в pp');
 
   const phoneType = String(caches.phoneTypes[0]?.code || '');
   assert(phoneType, 'phoneTypes: пустой справочник');
@@ -713,8 +713,8 @@ async function assertSeedTaskIntegrity(client, ph, taskId, taskTypeCode, seedKey
     const u = detail.store.user?.[uids[0]];
     assert(u && u.login, 'userChain: нет user в store');
     assert(Object.keys(u.userRoleList || {}).length > 0, 'userChain: нет ролей');
-    assert(Object.keys(u.ppList || {}).length > 0, 'userChain: нет pp');
-    const ppId = Object.keys(u.ppList).filter(Boolean)[0];
+    assert(Object.keys(u.pp || {}).length > 0, 'userChain: нет pp');
+    const ppId = Object.keys(u.pp).filter(Boolean)[0];
     const pp = detail.store.pp?.[ppId];
     assert(pp && pp.firstName, 'userChain: нет pp в store');
     assert(Object.keys(pp.phoneList || {}).length > 0, 'userChain: нет телефона у pp');

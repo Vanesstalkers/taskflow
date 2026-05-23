@@ -1,5 +1,5 @@
 const isObject = (value) =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 function mergeDeep({ target, source }) {
   for (const key of Object.keys(source)) {

@@ -28,8 +28,11 @@
           <ComplexBlock
             v-model="assigneeUserIds"
             :persist="{ collection: 'user' }"
-            :texts="{ pickerLabel: 'Исполнитель' }"
-            :add="{ addType: 'search' }"
+            :texts="{
+              pickerLabel: 'Исполнитель',
+              addPlaceholder: 'Поиск по логину (от 3 символов)',
+            }"
+            :add="{ addType: 'search', showCreateNewOption: false, minSelection: 1 }"
             :ui="{ disabled: creatingTask }"
             class="mt-3"
           />
