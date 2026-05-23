@@ -298,6 +298,13 @@ const removingKey = ref(null);
 const addingKey = ref(null);
 const pendingCreateFromStore = ref(false);
 let pendingCreateResolve = null;
+/** Отмена ожидания id после addObject при смене contextKey / defaultCollapsed — без UI. */
+const LINK_CREATE_CONTEXT_RESET = 'LINK_CREATE_CONTEXT_RESET';
+
+function isLinkCreateContextReset(error) {
+  return error?.message === LINK_CREATE_CONTEXT_RESET;
+}
+
 const removeError = ref('');
 /** Ошибка добавления связи / создания объекта (показ внутри блока + `linkAddError` для родителя). */
 const linkAddError = ref('');
@@ -646,7 +653,7 @@ watch(
     blockExpanded.value = !flat.value.defaultCollapsed;
     pendingCreateFromStore.value = false;
     if (pendingCreateResolve) {
-      pendingCreateResolve.reject(new Error('Сброс контекста'));
+      pendingCreateResolve.reject(new Error(LINK_CREATE_CONTEXT_RESET));
       pendingCreateResolve = null;
     }
     removeError.value = '';
@@ -836,7 +843,9 @@ async function createLinkedDocument(document = {}) {
       pendingCreateResolve.reject(error);
       pendingCreateResolve = null;
     }
-    reportLinkAddError(error);
+    if (!isLinkCreateContextReset(error)) {
+      reportLinkAddError(error);
+    }
     throw error;
   } finally {
     addingKey.value = null;

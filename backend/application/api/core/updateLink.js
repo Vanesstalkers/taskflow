@@ -12,53 +12,16 @@
    * }} params
    */
   method: async ({ collection, _id, linkField, targetId, action, linkPayload, taskType }) => {
-    if (typeof collection !== 'string' || collection.length === 0) {
-      throw new Error('Parameter "collection" must be a non-empty string');
-    }
-    if (!/^[a-zA-Z0-9_-]+$/.test(collection)) {
-      throw new Error('Invalid collection name');
-    }
-    if (typeof _id !== 'string' || _id.length === 0) {
-      throw new Error('Parameter "id" must be a non-empty string');
-    }
-    if (typeof linkField !== 'string' || linkField.length === 0) {
-      throw new Error('Parameter "linkField" must be a non-empty string');
-    }
-    if (!/^[a-zA-Z0-9_-]+$/.test(linkField)) {
-      throw new Error('Invalid linkField name');
-    }
-    if (typeof targetId !== 'string' || targetId.length === 0) {
-      throw new Error('Parameter "targetId" must be a non-empty string');
-    }
-    if (!/^[a-zA-Z0-9_-]+$/.test(targetId)) {
-      throw new Error('Invalid targetId');
-    }
-    if (action !== 'add' && action !== 'remove') {
-      throw new Error('Parameter "action" must be "add" or "remove"');
-    }
-
     const updatedAt = new Date();
     const path = `${linkField}.${targetId}`;
+    const payloadForAdd = linkPayload ?? {};
 
-    const isPlainObject =
-      linkPayload !== undefined &&
-      linkPayload !== null &&
-      typeof linkPayload === 'object' &&
-      !Array.isArray(linkPayload);
-    const payloadForAdd = isPlainObject ? linkPayload : {};
+    const update =
+      action === 'add'
+        ? { $set: { [path]: payloadForAdd, updatedAt } }
+        : { $unset: { [path]: '' }, $set: { updatedAt } };
 
-    let update;
-    if (action === 'add') {
-      update = { $set: { [path]: payloadForAdd, updatedAt } };
-    } else {
-      update = { $unset: { [path]: '' }, $set: { updatedAt } };
-    }
-
-    const result = await db.mongodb.updateOne(collection, { _id: new npm.mongodb.ObjectId(_id) }, update);
-
-    if (result.matchedCount === 0) {
-      throw new Error('Object not found');
-    }
+    await db.mongodb.updateOne(collection, { _id: new npm.mongodb.ObjectId(_id) }, update);
 
     context.client.emit('core/updateStore', {
       [collection]: {
@@ -72,7 +35,7 @@
     const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema();
     const linkCollection = schema?.[linkField]?.collection;
 
-    if (linkCollection) {
+    if (linkCollection && action === 'add') {
       const document = await db.mongodb.findOne(
         linkCollection,
         { _id: new npm.mongodb.ObjectId(targetId) },
@@ -85,11 +48,26 @@
         },
       );
 
-      if (document) {
-        context.client.emit('core/updateStore', {
-          [linkCollection]: { [targetId]: { ...document, _id: String(document._id) } },
-        });
-      }
+      const linkedStore = {};
+      const outId = String(document._id);
+      const hiddenFields = domain.collections.utils.getHiddenFields({
+        collection: linkCollection,
+        taskType: document.taskType,
+      });
+      linkedStore[linkCollection] = {
+        [outId]: { ...document, _id: outId, ...hiddenFields },
+      };
+
+      await domain.collections.utils.expandLinkedChain({
+        store: linkedStore,
+        fetchedEntity: new Set(),
+        lstNameSet: new Set(),
+        collectionName: linkCollection,
+        documents: [document],
+        schema: domain.collections[linkCollection].schema(),
+      });
+
+      context.client.emit('core/updateStore', linkedStore);
     }
 
     return { status: 'ok' };
