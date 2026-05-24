@@ -42,7 +42,7 @@
             @open-entity="emit('open-entity', $event)"
             @favourite-added="emit('favourite-added', $event)"
           />
-          <SearchEntityForm
+          <EntityForm
             v-else
             :collection="tab.collection"
             :entity-id="tab.code"
@@ -59,7 +59,7 @@
 <script setup>
 import { computed } from 'vue';
 import EntityCollectionList from './EntityCollectionList.vue';
-import SearchEntityForm from './SearchEntityForm.vue';
+import EntityForm from './EntityForm.vue';
 import { BOARD_TAB_ID } from '../composables/useAppTabs.js';
 
 const props = defineProps({

@@ -1,11 +1,14 @@
 <template>
   <div class="d-flex flex-column ga-4">
     <Employee
+      :task-type="task.taskType"
+      :link-schema-path="['createdEmployeeLinks']"
       :persist="{
         collection: 'employee',
         parentCollection: 'task',
         parentId: task._id,
         linkField: 'createdEmployeeLinks',
+        taskType: task.taskType,
       }"
       :add="employeeAdd"
       :texts="employeeTexts"

@@ -18,13 +18,13 @@
       if (collection === 'task' || collection === 'utils') continue;
 
       const def = domain.collections[collection];
-      const searchFields = def?.searchFields;
-      if (!Array.isArray(searchFields) || searchFields.length === 0) continue;
+      const cfg = domain.collections.utils.searchConfig;
+      if (!cfg.enabled(def)) continue;
 
       collections.push({
         collection,
-        title: def.title || def.searchLabel || collection,
-        searchFields,
+        title: def.title || collection,
+        fields: cfg.fields(def),
       });
     }
     collections.sort((a, b) => String(a.title).localeCompare(String(b.title), 'ru'));

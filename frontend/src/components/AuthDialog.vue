@@ -87,9 +87,18 @@ async function submitAuth() {
       password: authPassword.value,
     });
     if (response?.token) {
-      const { userId: _id, login } = response?.user || {};
+      const { _id, login, pp } = response?.user || {};
+      const ppLink =
+        pp && typeof pp === 'object'
+          ? Object.fromEntries(Object.keys(pp).map((ppId) => [ppId, {}]))
+          : {};
 
-      globalStore.store.user[_id] = { _id, login };
+      if (!globalStore.store.user) globalStore.store.user = {};
+      globalStore.store.user[_id] = { ...(globalStore.store.user[_id] || {}), _id, login, pp: ppLink };
+      const ppStore = response.store?.pp;
+      if (ppStore && typeof ppStore === 'object') {
+        globalStore.store.pp = { ...(globalStore.store.pp || {}), ...ppStore };
+      }
       globalStore.currentUserId = _id;
 
       localStorage.setItem('metarhia.session.token', response.token);
@@ -123,7 +132,7 @@ async function submitRegister() {
       password: authPassword.value,
     });
     if (response?.token) {
-      const { userId: _id, login } = response?.user || {};
+      const { _id, login } = response?.user || {};
 
       globalStore.currentUserId = _id;
       globalStore.store.user[_id] = { _id, login };

@@ -15,9 +15,10 @@ export const useStore = defineStore('store', {
 
       for (const [key, value] of Object.entries(store)) {
         if (!this.store[key]) this.store[key] = {};
-        for (const item of Object.values(value)) {
-          this.store[key][item._id] = item;
-        }
+      for (const item of Object.values(value)) {
+        const id = String(item._id);
+        this.store[key][id] = { ...(this.store[key][id] || {}), ...item };
+      }
       }
     },
 

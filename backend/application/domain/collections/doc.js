@@ -1,6 +1,8 @@
 ({
   title: 'Документы',
-  searchFields: ['fileName', 'title'],
+  search: {
+    fields: ['fileName', 'title'],
+  },
   schema: () => ({
     title: '',
     fileName: '',

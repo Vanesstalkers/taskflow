@@ -1,10 +1,5 @@
 <template>
   <v-app-bar elevation="1" density="comfortable" class="app-navbar border-b">
-    <v-app-bar-title class="app-navbar__title">
-      <span class="text-subtitle-1 font-weight-medium">{{ currentUserDisplay || 'Taskflow' }}</span>
-      <span v-if="status" class="text-caption text-medium-emphasis d-block">{{ status }}</span>
-    </v-app-bar-title>
-
     <div ref="searchWrapRef" class="app-navbar__search-wrap">
       <v-text-field
         v-model="query"
@@ -100,6 +95,30 @@
     </v-badge>
 
     <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="emit('create-task')"> Новая задача </v-btn>
+
+    <div v-if="currentUserId || currentUserDisplay || status" class="app-navbar__user ms-3">
+      <button
+        v-if="currentUserId"
+        type="button"
+        class="app-navbar__user-link text-subtitle-2 font-weight-medium"
+        @click="emit('open-current-user')"
+      >
+        {{ currentUserDisplay || 'Taskflow' }}
+      </button>
+      <span v-else class="text-subtitle-2 font-weight-medium">{{ currentUserDisplay || 'Taskflow' }}</span>
+      <span v-if="status" class="text-caption text-medium-emphasis d-block app-navbar__status">{{ status }}</span>
+    </div>
+
+    <v-btn
+      v-if="currentUserId"
+      class="ms-1"
+      variant="text"
+      size="small"
+      prepend-icon="mdi-logout"
+      @click="emit('logout')"
+    >
+      Выйти
+    </v-btn>
   </v-app-bar>
 </template>
 
@@ -109,6 +128,7 @@ import { getApi } from '../main.js';
 
 const props = defineProps({
   currentUserDisplay: { type: String, default: '' },
+  currentUserId: { type: String, default: '' },
   status: { type: String, default: '' },
   devMode: { type: Boolean, default: false },
   remarksBadgeCount: { type: Number, default: 0 },
@@ -123,6 +143,8 @@ const emit = defineEmits([
   'pick-task',
   'pick-entity',
   'open-collection-list',
+  'open-current-user',
+  'logout',
 ]);
 
 const selectedCollection = ref(null);
@@ -225,11 +247,37 @@ watch(
 </script>
 
 <style scoped>
-.app-navbar__title {
+.app-navbar__user {
   flex: 0 1 auto;
-  min-width: 120px;
-  max-width: 200px;
+  min-width: 0;
+  max-width: 240px;
+  text-align: right;
   overflow: hidden;
+}
+
+.app-navbar__status {
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-navbar__user-link {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: right;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-navbar__user-link:hover {
+  text-decoration: underline;
 }
 
 .app-navbar__search-wrap {

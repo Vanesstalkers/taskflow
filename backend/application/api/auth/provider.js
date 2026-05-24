@@ -69,4 +69,40 @@
       return null;
     }
   },
+
+  async buildUserPayload(user) {
+    if (!user) return null;
+
+    const linkSchema = domain.collections.utils.linkSchema;
+    const viewer = await domain.collections.utils.fieldAccess.buildViewer(user);
+    const userSchema = domain.collections.user.schema();
+    const userId = String(user._id || '');
+    const accessContext = { collection: 'user', entityId: userId };
+    const picked = linkSchema.pickDocumentForStore(user, userSchema, viewer, accessContext);
+    const ppLink = picked.pp && typeof picked.pp === 'object' ? picked.pp : {};
+    const ppSchema = domain.collections.pp.schema();
+    const pp = {};
+    const ppStore = {};
+
+    for (const ppId of Object.keys(ppLink)) {
+      pp[ppId] = {};
+      try {
+        const ppDoc = await db.mongodb.findOne('pp', {
+          _id: new npm.mongodb.ObjectId(ppId),
+        });
+        if (ppDoc) ppStore[ppId] = linkSchema.pickDocumentForStore(ppDoc, ppSchema, viewer);
+      } catch {
+        // связь есть, документ не загрузился — в store.pp не добавляем
+      }
+    }
+
+    return {
+      user: {
+        _id: String(user._id || ''),
+        login: user.login || '',
+        pp,
+      },
+      store: Object.keys(ppStore).length > 0 ? { pp: ppStore } : {},
+    };
+  },
 });

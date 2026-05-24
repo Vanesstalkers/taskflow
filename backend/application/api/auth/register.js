@@ -11,7 +11,7 @@
     return {
       status: 'success',
       token,
-      user: { userId: String(userId), login },
+      user: { _id: String(userId), login },
     };
   },
 });

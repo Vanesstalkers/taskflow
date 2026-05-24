@@ -1,6 +1,8 @@
 ({
   title: 'Подразделения',
-  searchFields: ['name'],
+  search: {
+    fields: ['name'],
+  },
   schema: () => ({
     name: '',
     description: '',

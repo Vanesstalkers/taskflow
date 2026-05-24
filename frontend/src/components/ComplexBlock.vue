@@ -39,7 +39,7 @@
           :class="{ 'multi-entity-picker__label-text--full-width': flat.fullWidthLabels }"
         >
           <slot name="label" :_id="String(key)" :record="getStoreRecord(key)">
-            {{ key }}
+            {{ labelForKey(key) }}
           </slot>
         </component>
         <v-btn
@@ -234,13 +234,18 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { addObject as callAddObject, updateLink as callUpdateLink } from '../utils/storeActions.js';
+import {
+  addObject as callAddObject,
+  updateLink as callUpdateLink,
+} from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
 import Input from './Input.vue';
 import InputFile from './InputFile.vue';
 import Radio from './Radio.vue';
 import Select from './Select.vue';
 import { buildLinkPartialDevId } from '../utils/devAnchorLink.js';
+import { findTaskLinkContext } from '../utils/linkContext.js';
+import { formatUserLabel, normalizeUserLogin } from '../utils/userLabel.js';
 
 const globalStore = useStore();
 
@@ -362,6 +367,8 @@ const flat = computed(() => {
     parentCollection: String(persist.parentCollection ?? '').trim(),
     parentId: String(persist.parentId ?? '').trim(),
     linkField: String(persist.linkField ?? '').trim(),
+    taskType: String(persist.taskType ?? '').trim(),
+    schemaPath: Array.isArray(persist.schemaPath) ? persist.schemaPath : [],
     contextKey: String(persist.contextKey || persist.parentId || '').trim(),
 
     listItemsRaw: Array.isArray(list.items) ? list.items : [],
@@ -426,6 +433,35 @@ const entityStoreCollection = computed(() => flat.value.collection);
 const linkPersistEnabled = computed(() =>
   Boolean(flat.value.parentCollection && flat.value.parentId && flat.value.linkField),
 );
+
+function resolveLinkContext(collection, parentId) {
+  const explicitType = String(flat.value.taskType || '').trim();
+  const explicitPath = flat.value.schemaPath;
+  const fromStore = findTaskLinkContext(collection, parentId, globalStore.store);
+
+  if (explicitPath.length > 0) {
+    return {
+      taskType:
+        explicitType ||
+        fromStore?.taskType ||
+        (collection === 'task' ? String(globalStore.store.task?.[parentId]?.taskType || '').trim() : ''),
+      schemaPath: explicitPath,
+    };
+  }
+
+  if (fromStore) {
+    return {
+      taskType: explicitType || fromStore.taskType,
+      schemaPath: fromStore.schemaPath,
+    };
+  }
+
+  return {
+    taskType:
+      explicitType || (collection === 'task' ? String(globalStore.store.task?.[parentId]?.taskType || '').trim() : ''),
+    schemaPath: [],
+  };
+}
 
 const resolvedAddType = computed(() => normalizeAddType(flat.value.addType) || 'select');
 
@@ -649,8 +685,15 @@ onMounted(() => {
 
 watch(
   () => [flat.value.contextKey, flat.value.defaultCollapsed],
-  () => {
-    blockExpanded.value = !flat.value.defaultCollapsed;
+  ([contextKey, defaultCollapsed], prev) => {
+    blockExpanded.value = !defaultCollapsed;
+    if (!prev) {
+      return;
+    }
+    const [prevKey, prevCollapsed] = prev;
+    if (contextKey === prevKey && defaultCollapsed === prevCollapsed) {
+      return;
+    }
     pendingCreateFromStore.value = false;
     if (pendingCreateResolve) {
       pendingCreateResolve.reject(new Error(LINK_CREATE_CONTEXT_RESET));
@@ -795,8 +838,31 @@ function getStoreRecord(key) {
   const collection = entityStoreCollection.value;
   if (!collection) return undefined;
   const bucket = getEntityBucket();
-  if (!bucket[k]) bucket[k] = { _id: k };
+  if (!bucket[k]) {
+    const seed = { _id: k };
+    if (collection === 'user') {
+      const src = globalStore.store.user?.[k];
+      const login = normalizeUserLogin(src?.login);
+      if (login) seed.login = login;
+      if (src?.displayTitle) seed.displayTitle = src.displayTitle;
+      if (src?._fio) seed._fio = src._fio;
+      if (src?.pp && typeof src.pp === 'object') seed.pp = src.pp;
+    }
+    bucket[k] = seed;
+  }
   return bucket[k];
+}
+
+function labelForKey(key) {
+  const record = getStoreRecord(key);
+  if (entityStoreCollection.value === 'user') {
+    const label = formatUserLabel(record, globalStore.store);
+    if (label) return label;
+  }
+  const field = flat.value.itemTitle || 'title';
+  const primary = record?.[field];
+  if (primary != null && String(primary).trim() !== '') return String(primary);
+  return String(key);
 }
 
 async function createLinkedDocument(document = {}) {
@@ -824,7 +890,7 @@ async function createLinkedDocument(document = {}) {
 
   try {
     pendingCreateFromStore.value = true;
-    await callAddObject({
+    const result = await callAddObject({
       collection: flat.value.collection,
       document: payload,
       link: {
@@ -833,9 +899,28 @@ async function createLinkedDocument(document = {}) {
         linkField: flat.value.linkField,
         linkPayload: {},
       },
+      ...resolveLinkContext(linkParentCollection.value, linkParentId.value),
     });
-    const createdId = await createdIdPromise;
+
+    let createdId = String(result?.createdId ?? '').trim();
+    if (!createdId) {
+      createdId = await createdIdPromise;
+    }
+
+    pendingCreateFromStore.value = false;
+    if (pendingCreateResolve) {
+      pendingCreateResolve.resolve(createdId);
+      pendingCreateResolve = null;
+    }
+
+    const idKey = String(createdId);
+    if (idKey && !selectedKeys.value.map(String).includes(idKey)) {
+      selectedKeys.value = [...selectedKeys.value, idKey];
+    }
+
     clearLinkAddError();
+    emit('linkAdded', { targetId: idKey, created: true });
+    emit('createNew', { _id: idKey });
     return createdId;
   } catch (error) {
     pendingCreateFromStore.value = false;
@@ -933,6 +1018,7 @@ async function onAddSelected(val) {
   try {
     const _id = linkParentId.value;
     const collection = linkParentCollection.value;
+    const linkDocument = getEntityBucket()[id];
     await callUpdateLink({
       _id,
       collection,
@@ -940,8 +1026,13 @@ async function onAddSelected(val) {
       targetId: id,
       action: 'add',
       linkPayload: {},
-      taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
+      linkDocument,
+      ...resolveLinkContext(collection, _id),
     });
+    const key = String(id);
+    if (!selectedKeys.value.some((k) => String(k) === key)) {
+      selectedKeys.value = [...selectedKeys.value, key];
+    }
     clearLinkAddError();
     emit('linkAdded', { targetId: id });
   } catch (error) {
@@ -971,13 +1062,15 @@ async function removeTarget(key) {
   try {
     const collection = linkParentCollection.value;
     const _id = linkParentId.value;
+    const linkDocument = getEntityBucket()[targetId];
     await callUpdateLink({
       _id,
       collection,
       linkField: flat.value.linkField,
       targetId,
       action: 'remove',
-      taskType: collection === 'task' ? globalStore.store[collection][_id].taskType : null,
+      linkDocument,
+      ...resolveLinkContext(collection, _id),
     });
     selectedKeys.value = selectedKeys.value.filter((k) => String(k) !== targetId);
     emit('linkRemoved', { targetId });
@@ -991,7 +1084,7 @@ async function removeTarget(key) {
 
 function onNonLinkSelectionUpdate(next) {
   const max = maxSelectionEffective.value;
-  const arr = Array.isArray(next) ? next.map((k) => String(k)) : [];
+  const arr = Array.isArray(next) ? next.map((k) => String(k)).filter(Boolean) : [];
   if (max != null && arr.length > max) {
     selectedKeys.value = arr.slice(0, max);
     reportLinkAddError(resolvedMaxSelectionMessage.value);

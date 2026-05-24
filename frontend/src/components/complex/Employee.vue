@@ -2,7 +2,7 @@
   <ComplexBlock
     v-if="showBlock"
     :model-value="linkIds"
-    :persist="persist"
+    :persist="rootPersist"
     :add="add"
     :texts="texts"
     :ui="ui"
@@ -35,6 +35,8 @@
               parentCollection: 'employee',
               parentId: _id,
               linkField: 'subdivision',
+              taskType,
+              schemaPath: linkSchemaPathArr,
             }"
             :add="{
               addType: 'search',
@@ -57,10 +59,14 @@
             v-if="_id"
             :parent-id="_id"
             parent-collection="employee"
+            :task-type="taskType"
+            :link-schema-path="linkSchemaPathArr"
             :ui="{ fullWidthLabels: true }"
           />
           <Employee
             v-if="_id && managerAdd && managerTexts"
+            :task-type="taskType"
+            :link-schema-path="linkSchemaPathArr"
             :persist="{
               collection: 'employee',
               parentCollection: 'employee',
@@ -121,12 +127,40 @@ const props = defineProps({
   persist: { type: Object, required: true },
   add: { type: Object, required: true },
   texts: { type: Object, required: true },
+  taskType: { type: String, default: '' },
+  /** Путь от task.schema до схемы employee (напр. `['createdEmployeeLinks']`). */
+  linkSchemaPath: { type: [String, Array], default: () => [] },
   managerAdd: { type: Object, default: undefined },
   managerTexts: { type: Object, default: undefined },
   ui: { type: Object, default: () => ({ fullWidthLabels: true }) },
 });
 
 const globalStore = useStore();
+
+const linkSchemaPathArr = computed(() => {
+  const raw = props.linkSchemaPath;
+  if (Array.isArray(raw)) return raw.map((k) => String(k).trim()).filter(Boolean);
+  const one = String(raw ?? '').trim();
+  return one ? [one] : [];
+});
+
+const rootPersist = computed(() => {
+  const taskType = String(props.taskType || props.persist.taskType || '').trim();
+  const pathFromPersist = Array.isArray(props.persist.schemaPath) ? props.persist.schemaPath : [];
+  const pathFromProp = linkSchemaPathArr.value;
+  const schemaPath =
+    props.persist.parentCollection === 'task'
+      ? []
+      : pathFromProp.length > 0
+        ? pathFromProp
+        : pathFromPersist;
+
+  return {
+    ...props.persist,
+    taskType,
+    schemaPath,
+  };
+});
 
 const showBlock = computed(() => Boolean(String(props.persist?.parentId || '').trim()));
 
@@ -185,8 +219,7 @@ function managerPhoneLines(managerId) {
       const phone = globalStore.store.phone?.[phoneId] || {};
       const typeLabel = lstTitle('phoneTypes', phone.phoneType);
       const number = [formatCode(phone.code), formatNational(phone.number)].filter(Boolean).join(' ').trim();
-      const active = phone.active ? '' : ' (неактивный)';
-      return number ? `${typeLabel}: ${number}${active}` : typeLabel;
+      return number ? `${typeLabel}: ${number}` : typeLabel;
     });
 }
 </script>

@@ -310,7 +310,7 @@ function assertOk(result, label) {
 function assertRegisterOk(result, label) {
   const ok = result && typeof result === 'object' && result.status === 'success';
   assert(ok, `${label}: ожидался { status: 'success' }`);
-  assert(result.user && result.user.userId, `${label}: нет user.userId`);
+  assert(result.user && result.user._id, `${label}: нет user._id`);
 }
 
 function rpcErrorText(err) {
@@ -731,7 +731,7 @@ async function runRegisterAndSeedAllTaskTypes(client, ph) {
     password: passwordUsed,
   });
   assertRegisterOk(reg, 'register');
-  const userId = String(reg.user.userId);
+  const userId = String(reg.user._id);
   console.log(`Зарегистрирован пользователь: ${loginUsed} (userId=${userId})`);
 
   const taskTypeItems = await fetchLst(client, ph, 'taskTypes');
@@ -852,8 +852,8 @@ async function main() {
       ph.phase = 'auth.signin';
       const signin = await client.call('auth', 'signin', { login: loginEnv, password: passwordEnv });
       const logged = signin?.status === 'logged' && signin?.user?.userId;
-      assert(logged, 'signin: нет status=logged или user.userId');
-      const userId = String(signin.user.userId);
+      assert(logged, 'signin: нет status=logged или user._id');
+      const userId = String(signin.user._id);
       console.log(`Вход: ok, userId=${userId} (${loginEnv})`);
       await runSigninSingleTaskScenario(client, ph, userId);
     } else {

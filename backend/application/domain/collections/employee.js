@@ -1,6 +1,8 @@
 ({
-  searchLabel: 'Сотрудники',
-  searchFields: ['position'],
+  title: 'Сотрудники',
+  search: {
+    fields: ['position'],
+  },
   schema: ({ ignore = [] } = {}) => ({
     position: '',
     positionType: { lst: 'jobTitles' },

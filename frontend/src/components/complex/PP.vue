@@ -7,6 +7,8 @@
       parentCollection,
       parentId,
       linkField,
+      taskType,
+      schemaPath: linkSchemaPathArr,
     }"
     :add="{ addType: 'button', separateCreateButton: true, maxSelection: 1, minSelection: 1 }"
     :texts="{
@@ -75,6 +77,8 @@
             parentCollection: 'pp',
             parentId: ppId,
             linkField: 'phoneList',
+            taskType,
+            schemaPath: phoneLinkSchemaPath,
           }"
           :add="{
             addType: 'select',
@@ -142,12 +146,23 @@ const props = defineProps({
   parentId: { type: String, required: true },
   parentCollection: { type: String, required: true },
   linkField: { type: String, default: 'pp' },
+  taskType: { type: String, default: '' },
+  linkSchemaPath: { type: [String, Array], default: () => [] },
   showFields: { type: Array, default: () => ['*'] },
   texts: { type: Object, default: () => ({}) },
   ui: { type: Object, default: () => ({}) },
 });
 
 const globalStore = useStore();
+
+const linkSchemaPathArr = computed(() => {
+  const raw = props.linkSchemaPath;
+  if (Array.isArray(raw)) return raw.map((k) => String(k).trim()).filter(Boolean);
+  const one = String(raw ?? '').trim();
+  return one ? [one] : [];
+});
+
+const phoneLinkSchemaPath = computed(() => [...linkSchemaPathArr.value, 'pp']);
 
 const showAll = computed(() => props.showFields.includes('*'));
 const shownSet = computed(() => new Set(props.showFields));

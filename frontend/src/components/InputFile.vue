@@ -51,6 +51,11 @@ import { saveField } from '../utils/storeActions.js';
 defineOptions({ inheritAttrs: false });
 
 const OUTLINE_FLASH_MS = 2000;
+const LINK_CREATE_CONTEXT_RESET = 'LINK_CREATE_CONTEXT_RESET';
+
+function isLinkCreateContextReset(error) {
+  return error?.message === LINK_CREATE_CONTEXT_RESET;
+}
 
 const fileName = defineModel({ type: String, default: '' });
 
@@ -256,8 +261,10 @@ async function onFileInputUpdate(value) {
       lastCommitted.value = '';
     }
   } catch (error) {
-    saveError.value = error.message || 'Не удалось загрузить или сохранить';
-    flashError();
+    if (!isLinkCreateContextReset(error)) {
+      saveError.value = error.message || 'Не удалось загрузить или сохранить';
+      flashError();
+    }
   } finally {
     pickedFile.value = null;
     saving.value = false;

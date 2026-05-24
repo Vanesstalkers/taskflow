@@ -3,6 +3,7 @@
     <AppNavbar
       v-model:dev-mode="devMode"
       :current-user-display="currentUserDisplay"
+      :current-user-id="currentUserId"
       :status="`Статус backend: ${status}`"
       :searchable-collections="searchableCollections"
       :collections-loading="collectionsLoading"
@@ -12,6 +13,8 @@
       @pick-task="onNavbarPickTask"
       @pick-entity="onNavbarPickEntity"
       @open-collection-list="onOpenCollectionList"
+      @open-current-user="openCurrentUser"
+      @logout="onLogout"
     />
 
     <AppFavouritesSidebar
@@ -109,6 +112,7 @@ import { normalizeRemarkStatus } from './utils/remarkStatus.js';
 import { useDevRemarkCapture } from './composables/useDevRemarkCapture.js';
 import { useDevMode } from './composables/useDevMode.js';
 import { useStore } from './stores/store.js';
+import { formatUserLabel } from './utils/userLabel.js';
 
 const globalStore = useStore();
 const { devMode } = useDevMode();
@@ -274,9 +278,7 @@ const canMoveRight = (statusId) => getColumnIndex(statusId) < columns.length - 1
 const currentUserId = computed(() => String(globalStore.currentUserId || ''));
 const currentUserDisplay = computed(() => {
   const user = globalStore.store.user?.[currentUserId.value];
-  if (!user) return '';
-  const login = String(user.login || '').trim();
-  return login;
+  return formatUserLabel(user, globalStore.store);
 });
 const getTaskMoveMethod = () => api?.core?.taskMove;
 const getUserTaskListMethod = () => api?.core?.getUserTaskList;
@@ -349,6 +351,17 @@ function onOpenCollectionList({ collection, title }) {
 
 function onListOpenEntity(payload) {
   onNavbarPickEntity(payload);
+}
+
+function openCurrentUser() {
+  const id = currentUserId.value;
+  if (!id) return;
+  onNavbarPickEntity({
+    collection: 'user',
+    code: id,
+    title: currentUserDisplay.value || id,
+    groupTitle: 'Пользователи',
+  });
 }
 
 function upsertFavourite(fav) {
@@ -494,16 +507,56 @@ const loadTask = async (_id) => {
   }
 };
 
+async function reloadSessionData() {
+  const tasksList = getUserTaskListMethod();
+  if (!tasksList) throw new Error('API tasksList недоступен');
+  const response = await tasksList();
+  globalStore.setData({
+    lst: response.lst,
+    store: {
+      task: response.tasks || [],
+      user: response.users || [],
+    },
+  });
+  status.value = 'Подключено';
+  await loadView();
+}
+
+const onLogout = async () => {
+  const token = localStorage.getItem('metarhia.session.token');
+  try {
+    const signout = api?.auth?.signout;
+    if (token && typeof signout === 'function') {
+      await signout({ token });
+    }
+  } catch (error) {
+    errorText.value = error.message || 'Не удалось выполнить выход';
+  } finally {
+    localStorage.removeItem('metarhia.session.token');
+    location.reload();
+  }
+};
+
 const tryRestoreSession = async () => {
   const token = localStorage.getItem('metarhia.session.token');
   if (!token || !api?.auth?.restore) return false;
   try {
     const response = await api.auth.restore({ token });
     if (response?.status === 'logged') {
-      const { userId: _id, login } = response.user || {};
+      const { _id, login, pp } = response.user || {};
+      const ppLink =
+        pp && typeof pp === 'object'
+          ? Object.fromEntries(Object.keys(pp).map((ppId) => [ppId, {}]))
+          : {};
 
       globalStore.currentUserId = _id;
-      globalStore.store.user[_id] = { _id, login };
+      if (!globalStore.store.user) globalStore.store.user = {};
+      globalStore.store.user[_id] = { ...(globalStore.store.user[_id] || {}), _id, login, pp: ppLink };
+
+      const ppStore = response.store?.pp;
+      if (ppStore && typeof ppStore === 'object') {
+        globalStore.store.pp = { ...(globalStore.store.pp || {}), ...ppStore };
+      }
 
       return true;
     }
@@ -522,20 +575,7 @@ onMounted(async () => {
       await authDialogRef.value?.openAndWait();
     }
     await subscribeStoreUpdates();
-    const tasksList = getUserTaskListMethod();
-    if (!tasksList) throw new Error('API tasksList недоступен');
-    const response = await tasksList();
-    
-    globalStore.setData({
-      lst: response.lst,
-      store: {
-        task: response.tasks || [],
-        user: response.users || [],
-      },
-    });
-
-    status.value = 'Подключено';
-    await loadView();
+    await reloadSessionData();
   } catch (error) {
     status.value = 'Недоступен';
     errorText.value = `Не удалось подключиться к backend: ${error.message}`;

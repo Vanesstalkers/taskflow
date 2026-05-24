@@ -2,10 +2,11 @@
   access: 'public',
   method: async ({ collection, search = '', limit = 100 }) => {
     const def = domain.collections[collection];
-    const searchFields = def.searchFields;
+    const fields = domain.collections.utils.searchConfig.fields(def);
 
     const schema = def.schema();
-    const columns = domain.collections.utils.listColumnsFromSchema(schema);
+    const viewer = await domain.collections.utils.fieldAccess.loadViewer(context.session.state.userId);
+    const columns = domain.collections.utils.listColumnsFromSchema(schema, viewer);
 
     const projection = { _id: 1 };
     for (const col of columns) projection[col.key] = 1;
@@ -17,7 +18,7 @@
     const query =
       search.length >= 3
         ? {
-            $or: searchFields.map((field) => ({
+            $or: fields.map((field) => ({
               [field]: { $regex: search, $options: 'i' },
             })),
           }
@@ -59,11 +60,11 @@
 
     return {
       collection,
-      title: def.title || def.searchLabel || collection,
+      title: def.title || collection,
       columns,
       rows,
       lst,
-      searchFields,
+      fields,
     };
   },
 });

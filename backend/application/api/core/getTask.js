@@ -15,6 +15,8 @@
       if (value.collection && !task[key]) task[key] = {};
     }
 
+    const viewer = await domain.collections.utils.fieldAccess.loadViewer(context.session.state.userId);
+
     await domain.collections.utils.expandLinkedChain({
       store: result.store,
       fetchedEntity,
@@ -22,6 +24,7 @@
       collectionName: 'task',
       documents: [document],
       schema,
+      viewer,
     });
 
     result.store.task = { [task._id]: task };

@@ -1,5 +1,5 @@
 ({
-  searchLabel: 'Избранное',
+  title: 'Избранное',
   schema: () => ({
     title: '',
     icon: '',

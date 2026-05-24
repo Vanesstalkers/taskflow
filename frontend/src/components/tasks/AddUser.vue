@@ -7,6 +7,7 @@
         parentCollection: 'task',
         parentId: task._id,
         linkField: 'createdUserLinks',
+        taskType: task.taskType,
         contextKey: task._id,
       }"
       :add="{
@@ -51,6 +52,8 @@
               parentCollection: 'user',
               parentId: _id,
               linkField: 'userRoleList',
+              taskType: task.taskType,
+              schemaPath: ['createdUserLinks'],
               contextKey: _id,
             }"
             :add="{
@@ -70,7 +73,14 @@
               <span>{{ record?.type || roleId }}</span>
             </template>
           </ComplexBlock>
-          <PP v-if="_id" :parent-id="_id" parent-collection="user" :show-fields="['*']" />
+          <PP
+            v-if="_id"
+            :parent-id="_id"
+            parent-collection="user"
+            :task-type="task.taskType"
+            :link-schema-path="['createdUserLinks']"
+            :show-fields="['*']"
+          />
         </div>
       </template>
     </ComplexBlock>

@@ -20,6 +20,13 @@ export const applyStorePatch = (patch) => {
   mergeDeep({ target, source: patch });
 };
 
+export const applyLstPatch = (patch) => {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return;
+  const pinia = getActivePinia();
+  if (!pinia) return;
+  useStore(pinia).setData({ lst: patch });
+};
+
 export const subscribeStoreUpdates = async () => {
   if (isSubscribed) return;
   const backend = getBackendState();
@@ -29,6 +36,7 @@ export const subscribeStoreUpdates = async () => {
 
   // Expected event payload: { [collection]: { [_id]: { ... } } }
   api.core.on('updateStore', applyStorePatch);
+  api.core.on('updateLst', applyLstPatch);
 
   isSubscribed = true;
 };
@@ -70,7 +78,7 @@ export async function saveField(params) {
 
 /**
  * backend/application/api/core/updateLink.js — одна связь в мапе (add/remove).
- * @param {{ collection: string, _id: string, linkField: string, targetId: string, action: 'add' | 'remove', linkPayload?: Record<string, unknown>, taskType?: string }} params
+ * @param {{ collection: string, _id: string, linkField: string, targetId: string, action: 'add' | 'remove', linkPayload?: Record<string, unknown>, linkDocument?: Record<string, unknown>, taskType?: string, schemaPath?: string[] }} params
  */
 export async function updateLink(params) {
   const api = getApi();
@@ -78,15 +86,41 @@ export async function updateLink(params) {
   if (!method) {
     throw new Error('API updateLink недоступен');
   }
-  const { collection, _id, linkField, targetId, action, linkPayload = {}, taskType } = params;
-  const result = await method({ collection, _id, linkField, targetId, action, linkPayload, taskType });
+  const {
+    collection,
+    _id,
+    linkField,
+    targetId,
+    action,
+    linkPayload = {},
+    linkDocument,
+    taskType,
+    schemaPath,
+  } = params;
+  const result = await method({
+    collection,
+    _id,
+    linkField,
+    targetId,
+    action,
+    linkPayload,
+    linkDocument,
+    taskType,
+    schemaPath,
+  });
   assertUpdateFieldOk(result);
+  if (result?.store && typeof result.store === 'object') {
+    applyStorePatch(result.store);
+  }
+  if (result?.lst && typeof result.lst === 'object') {
+    applyLstPatch(result.lst);
+  }
   return result;
 }
 
 /**
  * backend/application/api/core/addObject.js — создание документа.
- * @param {{ collection: string, document: Record<string, unknown>, link?: object }} params
+ * @param {{ collection: string, document: Record<string, unknown>, link?: object, taskType?: string, schemaPath?: string[] }} params
  */
 export async function addObject(params) {
   const api = getApi();
@@ -94,8 +128,8 @@ export async function addObject(params) {
   if (!method) {
     throw new Error('API addObject недоступен');
   }
-  const { collection, document, link } = params;
-  const result = await method({ collection, document, link });
+  const { collection, document, link, taskType, schemaPath } = params;
+  const result = await method({ collection, document, link, taskType, schemaPath });
   assertUpdateFieldOk(result);
   return result;
 }

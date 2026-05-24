@@ -40,7 +40,7 @@ declare global {
       _id?: string;
       linkField?: string;
       linkPayload?: Record<string, unknown>;
-    }): Promise<StatusResult & { _id: string }>;
+    }): Promise<StatusResult & { createdId?: string }>;
 
     function updateField(params: {
       collection: string;
@@ -57,9 +57,10 @@ declare global {
       targetId: string;
       action: 'add' | 'remove';
       linkPayload?: Record<string, unknown>;
+      linkDocument?: Record<string, unknown>;
     }): Promise<StatusResult>;
 
-    /** Поиск по коллекции; поля задаются в `domain.collections[collection].searchFields` */
+    /** Поиск по коллекции; поля задаются в `domain.collections[collection].search.fields` */
     function search(params: {
       collection: string;
       search?: string;
@@ -74,13 +75,13 @@ declare global {
       collections: Array<{
         collection: string;
         title: string;
-        searchFields: string[];
+        fields: string[];
       }>;
       favourites: Array<Record<string, unknown>>;
       remarksBadgeCount: number;
     }>;
 
-    /** Глобальный поиск: задачи пользователя и коллекции с `searchFields` */
+    /** Глобальный поиск: задачи пользователя и коллекции с `search` */
     function searchGlobal(params: {
       search?: string;
       limit?: number;

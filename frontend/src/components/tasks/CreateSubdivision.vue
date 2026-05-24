@@ -7,6 +7,7 @@
         parentCollection: 'task',
         parentId: task._id,
         linkField: 'createdSubdivisionLinks',
+        taskType: task.taskType,
         contextKey: task._id,
       }"
       :add="{

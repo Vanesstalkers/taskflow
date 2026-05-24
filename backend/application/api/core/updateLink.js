@@ -2,16 +2,21 @@
   access: 'public',
   /**
    * Добавляет или удаляет одну связь в объекте-мапе на документе (как userLinks: { [id]: { ... } }).
-   * @param {{
-   *   collection: string,
-   *   _id: string,
-   *   linkField: string,
-   *   targetId: string,
-   *   action: 'add' | 'remove',
-   *   linkPayload?: Record<string, unknown>,
-   * }} params
    */
-  method: async ({ collection, _id, linkField, targetId, action, linkPayload, taskType }) => {
+  method: async ({ collection, _id, linkField, targetId, action, linkPayload, taskType, schemaPath, linkDocument }) => {
+    const viewer = await domain.collections.utils.fieldAccess.loadViewer(context.session.state.userId);
+    await domain.collections.utils.fieldAccess.assertLinkWritable({
+      collection,
+      _id,
+      linkField,
+      taskType,
+      schemaPath,
+      viewer,
+      action,
+      targetId,
+      linkDocument,
+    });
+
     const updatedAt = new Date();
     const path = `${linkField}.${targetId}`;
     const payloadForAdd = linkPayload ?? {};
@@ -23,53 +28,73 @@
 
     await db.mongodb.updateOne(collection, { _id: new npm.mongodb.ObjectId(_id) }, update);
 
-    context.client.emit('core/updateStore', {
+    const storePatch = {
       [collection]: {
         [_id]: {
           [linkField]: { [targetId]: action === 'add' ? payloadForAdd : null },
           updatedAt,
         },
       },
-    });
+    };
 
-    const schema = taskType ? domain.collections.task[taskType].schema() : domain.collections[collection].schema();
-    const linkCollection = schema?.[linkField]?.collection;
+    const linkSchemaUtil = domain.collections.utils.linkSchema;
+    const linkSchemaPathSegments = Array.isArray(schemaPath) ? schemaPath : [];
+    const linkFieldDef = linkSchemaUtil.resolveLinkFieldDef({
+      taskType,
+      collection,
+      linkField,
+      schemaPath: linkSchemaPathSegments,
+    });
+    const resolvedLink = linkSchemaUtil.resolveFieldDef(linkFieldDef);
+    const linkCollection = resolvedLink?.collection;
+
+    let linkedLst = {};
 
     if (linkCollection && action === 'add') {
-      const document = await db.mongodb.findOne(
-        linkCollection,
-        { _id: new npm.mongodb.ObjectId(targetId) },
-        {
-          // TODO: restore projection
-          // projection: {
-          //   ...Object.fromEntries(schema?.[linkField]?.fields?.map((field) => [field, 1]) || []),
-          //   ...domain.collections.utils.getHiddenFields({ collection: linkCollection, taskType }),
-          // },
-        },
-      );
-
-      const linkedStore = {};
-      const outId = String(document._id);
-      const hiddenFields = domain.collections.utils.getHiddenFields({
-        collection: linkCollection,
-        taskType: document.taskType,
-      });
-      linkedStore[linkCollection] = {
-        [outId]: { ...document, _id: outId, ...hiddenFields },
-      };
-
-      await domain.collections.utils.expandLinkedChain({
-        store: linkedStore,
-        fetchedEntity: new Set(),
-        lstNameSet: new Set(),
-        collectionName: linkCollection,
-        documents: [document],
-        schema: domain.collections[linkCollection].schema(),
-      });
-
-      context.client.emit('core/updateStore', linkedStore);
+      if (taskType) {
+        linkedLst = await linkSchemaUtil.appendLinkedTargetToStorePatch({
+          storePatch,
+          taskType,
+          schemaPath: linkSchemaPathSegments,
+          parentCollection: collection,
+          linkField,
+          targetCollection: linkCollection,
+          targetId,
+        });
+      } else {
+        const parentDef = domain.collections[collection];
+        if (parentDef && typeof parentDef.schema === 'function') {
+          const parentSchema = parentDef.schema();
+          const linkFieldDef = linkSchemaUtil.resolveFieldDef(parentSchema[linkField]);
+          if (linkFieldDef?.collection) {
+            const nestedSchema = linkSchemaUtil.schemaForLinkField(linkFieldDef, linkCollection);
+            const doc = await db.mongodb.findOne(linkCollection, {
+              _id: new npm.mongodb.ObjectId(targetId),
+            });
+            if (doc) {
+              const sid = String(doc._id);
+              const nestedAccessContext = { collection: linkCollection, entityId: sid };
+              if (!storePatch[linkCollection]) storePatch[linkCollection] = {};
+              storePatch[linkCollection][sid] = {
+                ...linkSchemaUtil.pickDocumentForStore(doc, nestedSchema, viewer, nestedAccessContext),
+                ...linkSchemaUtil.getHiddenFieldsFromSchema(nestedSchema, viewer, nestedAccessContext),
+              };
+              const lstNameSet = new Set();
+              linkSchemaUtil.mergeLstNamesFromSchema(lstNameSet, nestedSchema);
+              linkedLst = Object.fromEntries(
+                [...lstNameSet].map((name) => [name, domain.lst[name].items]),
+              );
+            }
+          }
+        }
+      }
     }
 
-    return { status: 'ok' };
+    context.client.emit('core/updateStore', storePatch);
+    if (Object.keys(linkedLst).length > 0) {
+      context.client.emit('core/updateLst', linkedLst);
+    }
+
+    return { status: 'ok', lst: linkedLst, store: storePatch };
   },
 });

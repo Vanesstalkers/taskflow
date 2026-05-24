@@ -4,12 +4,17 @@
     const schema = taskType
       ? domain.collections.task[taskType].schema()
       : domain.collections[collection].schema();
+    const linkSchema = domain.collections.utils.linkSchema;
+    const viewer = await domain.collections.utils.fieldAccess.loadViewer(context.session.state.userId);
+    const accessContext = { collection, entityId: String(_id || '').trim() };
+    domain.collections.utils.fieldAccess.assertFieldsWritable(schema, data, viewer, accessContext);
 
     const setPayload = {};
     for (const [fieldName, fieldValue] of Object.entries(data)) {
       let normalized = fieldValue;
-      if (schema?.[fieldName]?.onUpdate) {
-        normalized = await schema[fieldName].onUpdate(fieldValue);
+      const fieldDef = linkSchema.resolveFieldDef(schema[fieldName]);
+      if (fieldDef?.onUpdate) {
+        normalized = await fieldDef.onUpdate(fieldValue);
       }
       setPayload[fieldName] = normalized;
       await domain.collections.utils.ensureUniqueKeys.assertForFieldUpdate({
@@ -37,7 +42,12 @@
         [_id]: {
           ...setPayload,
           updatedAt,
-          ...domain.collections.utils.getHiddenFields({ collection, taskType }),
+          ...(await domain.collections.utils.getHiddenFields({
+            collection,
+            taskType,
+            viewer,
+            accessContext,
+          })),
         },
       },
     });

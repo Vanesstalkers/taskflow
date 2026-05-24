@@ -27,15 +27,16 @@
           />
           <ComplexBlock
             v-model="assigneeUserIds"
-            :persist="{ collection: 'user' }"
+            :persist="{ collection: 'user', contextKey: String(assigneePickerKey) }"
+            :list="{ itemTitle: 'login', itemValue: '_id' }"
             :texts="{
               pickerLabel: 'Исполнитель',
-              addPlaceholder: 'Поиск по логину (от 3 символов)',
+              addPlaceholder: 'Поиск по логину или ФИО (от 3 символов)',
             }"
             :add="{ addType: 'search', showCreateNewOption: false, minSelection: 1 }"
-            :ui="{ disabled: creatingTask }"
-            class="mt-3"
-          />
+          :ui="{ disabled: creatingTask }"
+          class="mt-3"
+        />
         </v-card-text>
         <v-alert v-if="createTaskError" type="error" variant="tonal" density="compact" class="mx-4 mb-2" role="alert">
           {{ createTaskError }}
@@ -55,6 +56,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import ComplexBlock from './ComplexBlock.vue';
 import { getApi } from '../main.js';
 import { useStore } from '../stores/store.js';
+import { normalizeUserLogin } from '../utils/userLabel.js';
 
 const getTaskCreateMethod = () => getApi()?.core?.addObject;
 
@@ -67,6 +69,7 @@ const createTaskFormRef = ref(null);
 const newTitle = ref('');
 const newTaskType = ref('');
 const assigneeUserIds = ref([]);
+const assigneePickerKey = ref(0);
 const creatingTask = ref(false);
 
 const currentUserId = computed(() => String(globalStore.currentUserId || ''));
@@ -148,9 +151,24 @@ async function submit() {
   }
 }
 
+function ensureCurrentUserInStore() {
+  const id = currentUserId.value;
+  if (!id) return;
+  const src = globalStore.store.user?.[id] || {};
+  const login = normalizeUserLogin(src.login);
+  if (!globalStore.store.user) globalStore.store.user = {};
+  globalStore.store.user[id] = {
+    _id: id,
+    ...(login ? { login } : {}),
+    ...(src.pp && typeof src.pp === 'object' ? { pp: src.pp } : {}),
+  };
+}
+
 watch(open, async (isOpen) => {
   if (!isOpen) return;
   createTaskError.value = '';
+  ensureCurrentUserInStore();
+  assigneePickerKey.value += 1;
 
   await nextTick();
 

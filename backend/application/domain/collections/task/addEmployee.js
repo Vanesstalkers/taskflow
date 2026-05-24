@@ -5,15 +5,28 @@
       collection: 'employee',
       schema: {
         ...domain.collections.employee.schema(),
-        manager: () => {
-          const manager = domain.collections.employee.schema().manager;
-          manager.schema.pp = Object.fromEntries(
-            Object.entries(domain.collections.pp.schema()).filter(([key]) =>
-              ['firstName', 'lastName', 'middleName', 'phoneList'].includes(key),
-            ),
-          );
-          return manager;
-        },
+        manager: () => ({
+          collection: 'employee',
+          schema: {
+            ...domain.collections.employee.schema({ ignore: ['manager'] }),
+            pp: {
+              collection: 'pp',
+              schema: {
+                ...Object.fromEntries(
+                  Object.entries(domain.collections.pp.schema()).filter(([key]) =>
+                    ['firstName', 'lastName', 'middleName'].includes(key),
+                  ),
+                ),
+                phoneList: {
+                  collection: 'phone',
+                  schema: Object.fromEntries(
+                    Object.entries(domain.collections.phone.schema()).filter(([key]) => key !== 'active'),
+                  ),
+                },
+              },
+            },
+          },
+        }),
       },
     },
   }),

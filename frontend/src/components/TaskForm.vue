@@ -21,7 +21,7 @@
           </v-chip>
         </div>
       </div>
-      <div class="d-flex flex-shrink-0 ga-1">
+      <div v-if="!embedded" class="d-flex flex-shrink-0 ga-1">
         <v-btn
           variant="text"
           density="comfortable"
@@ -36,7 +36,7 @@
         </v-btn>
       </div>
     </div>
-    <div class="d-flex align-center flex-wrap ga-2 mb-4">
+    <div v-if="!embedded" class="d-flex align-center flex-wrap ga-2 mb-4">
       <v-btn
         size="small"
         variant="tonal"
@@ -75,11 +75,12 @@
             parentCollection: 'task',
             parentId: taskId,
             linkField: 'userLinks',
+            taskType: task.taskType,
             contextKey: taskId,
           }"
           :texts="{
             emptyText: 'Исполнители не выбраны',
-            addPlaceholder: 'Поиск по логину (от 3 символов)',
+            addPlaceholder: 'Поиск по логину или ФИО (от 3 символов)',
           }"
           :add="{ addType: 'search', showCreateNewOption: false, minSelection: 1 }"
           :status="{
@@ -90,11 +91,7 @@
           @link-removed="panelFieldErrors.assignees = ''"
           @link-add-error="panelFieldErrors.assignees = $event"
           @link-added="panelFieldErrors.assignees = ''"
-        >
-          <template #label="{ _id, record }">
-            <span>{{ record?.login || _id }}</span>
-          </template>
-        </ComplexBlock>
+        />
       </div>
       <div v-show="panelActiveTab === 'files'">
         <ComplexBlock
@@ -104,6 +101,7 @@
             parentCollection: 'task',
             parentId: taskId,
             linkField: 'docLinks',
+            taskType: task.taskType,
             contextKey: taskId,
           }"
           :add="{ addType: 'file', addPlacement: 'inline', showCreateNewOption: false }"
@@ -181,6 +179,8 @@ const props = defineProps({
   canMoveLeft: { type: Boolean, default: false },
   canMoveRight: { type: Boolean, default: false },
   movingTaskId: { type: String, default: '' },
+  /** Вкладка поиска: без кнопок закрытия и переноса по колонкам */
+  embedded: { type: Boolean, default: false },
 });
 
 defineEmits(['close', 'move', 'add-favourite']);

@@ -37,20 +37,12 @@
     for (const collection of Object.keys(domain.collections)) {
       if (collection === 'task' || collection === 'utils') continue;
 
-      const searchFields = domain.collections[collection]?.searchFields;
-      if (!Array.isArray(searchFields) || searchFields.length === 0) continue;
+      const def = domain.collections[collection];
+      if (!domain.collections.utils.searchConfig.enabled(def)) continue;
 
-      const projection = { _id: 1 };
-      for (const field of searchFields) projection[field] = 1;
-
-      const query = {
-        $or: searchFields.map((field) => ({
-          [field]: { $regex: search, $options: 'i' },
-        })),
-      };
-
-      const documents = await db.mongodb.find(collection, query, {
-        projection,
+      const documents = await domain.collections.utils.runCollectionSearch({
+        collection,
+        search,
         limit: perGroupLimit,
       });
 

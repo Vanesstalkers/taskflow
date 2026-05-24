@@ -1,6 +1,7 @@
 'use strict';
 
 const init = require('eslint-config-metarhia');
+const eslintConfigPrettier = require('eslint-config-prettier');
 
 module.exports = [
   ...init,
@@ -52,4 +53,6 @@ module.exports = [
       },
     },
   },
+  // После metarhia: stylistic-issues снова включает no-extra-parens и др.
+  eslintConfigPrettier,
 ];

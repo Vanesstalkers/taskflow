@@ -1,16 +1,16 @@
 ({
   fromDocument(collection, document) {
     const def = domain.collections[collection];
-    if (typeof def?.formatSearchTitle === 'function') {
-      return def.formatSearchTitle(document);
-    }
+    const cfg = domain.collections.utils.searchConfig;
+    const titleFn = cfg.title(def);
+    if (titleFn) return titleFn(document);
 
-    const searchFields = def?.searchFields;
-    if (!Array.isArray(searchFields) || searchFields.length === 0) {
+    const fields = cfg.fields(def);
+    if (fields.length === 0) {
       return String(document._id);
     }
 
-    const parts = searchFields
+    const parts = fields
       .map((field) => document[field])
       .filter((v) => v !== null && String(v).trim() !== '');
 

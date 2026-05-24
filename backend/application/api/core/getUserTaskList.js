@@ -35,11 +35,20 @@
     }
 
     const oidList = [...userIds].map((id) => new npm.mongodb.ObjectId(id));
-    const usersData = await db.mongodb.find('user', { _id: { $in: oidList } }, { projection: { login: 1 } });
-    const users = usersData.map((user) => ({
-      _id: String(user._id),
-      login: user.login || '',
-    }));
+    const usersData = await db.mongodb.find('user', { _id: { $in: oidList } }, { projection: { login: 1, pp: 1 } });
+    const linkSchema = domain.collections.utils.linkSchema;
+    const userSchema = domain.collections.user.schema();
+
+    const users = usersData.map((user) => {
+      const picked = linkSchema.pickDocumentForStore(user, userSchema);
+      const ppLink = picked.pp && typeof picked.pp === 'object' ? picked.pp : {};
+      const pp = Object.fromEntries(Object.keys(ppLink).map((ppId) => [String(ppId), {}]));
+      return {
+        _id: String(user._id),
+        login: user.login || '',
+        pp,
+      };
+    });
 
     const lstNameSet = new Set();
     for (const task of tasks) {

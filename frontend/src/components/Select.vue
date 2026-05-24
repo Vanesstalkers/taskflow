@@ -44,11 +44,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getApi } from '../main.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
+import { formatUserLabel, fioFromSearchTitle, loginFromSearchTitle, normalizeUserLogin, userMatchesSearchQuery } from '../utils/userLabel.js';
 
 defineOptions({ inheritAttrs: false });
 
@@ -134,25 +135,66 @@ function getSearchBucket() {
   return globalStore.store[name];
 }
 
+function pickerLabel(record, id) {
+  const tk = props.itemTitle;
+  const raw = record && typeof record === 'object' ? record : {};
+  const key = String(id);
+
+  if (searchCollectionName.value === 'user') {
+    const fromGlobal = globalStore.store.user?.[key];
+    const label = formatUserLabel(fromGlobal || raw, globalStore.store);
+    if (label && label !== key) return label;
+  }
+
+  const fromStore =
+    searchCollectionName.value === 'user' && tk === 'login'
+      ? String(getSearchBucket()?.[key]?.login ?? globalStore.store.user?.[key]?.login ?? '').trim()
+      : '';
+
+  let label = String(raw[tk] ?? '').trim();
+  if (!label || label === key) label = String(raw.title ?? raw.login ?? '').trim();
+  if ((!label || label === key) && fromStore) label = fromStore;
+  return label && label !== key ? label : key;
+}
+
 function pickerRow(record, id) {
   const tk = props.itemTitle;
   const vk = props.itemValue;
-  const raw = record && typeof record === 'object' ? record : {};
-  const primary = raw[tk];
-  if (primary != null && String(primary).trim() !== '') {
-    return { [tk]: String(primary), [vk]: String(id) };
-  }
-  const title = String(raw.login || '').trim() || String(id);
-  return { [tk]: title, [vk]: String(id) };
+  const key = String(id);
+  return { [tk]: pickerLabel(record, key), [vk]: key };
 }
 
 function idFromSearchRow(row) {
   if (!row || typeof row !== 'object') return '';
   const vk = props.itemValue;
-  return String(row._id ?? row[vk] ?? '').trim();
+  // core/search отдаёт { code, title }; в store часто _id
+  return String(row._id ?? row[vk] ?? row.code ?? '').trim();
 }
 
-function appendPreserveIds(items) {
+function userRecordForId(id) {
+  const key = String(id);
+  const bucket = getSearchBucket();
+  return (
+    bucket?.[key] ||
+    (searchCollectionName.value === 'user' ? globalStore.store.user?.[key] : undefined)
+  );
+}
+
+function shouldShowUserRecord(record, query) {
+  if (searchCollectionName.value !== 'user') return !String(query || '').trim();
+  return userMatchesSearchQuery(record, query, globalStore.store);
+}
+
+function currentUserBaselineItems(query = '') {
+  if (searchCollectionName.value !== 'user') return [];
+  const sid = String(globalStore.currentUserId || '').trim();
+  if (!sid) return [];
+  const record = userRecordForId(sid);
+  if (!record || !shouldShowUserRecord(record, query)) return [];
+  return [pickerRow(record, sid)];
+}
+
+function appendPreserveIds(items, query = '') {
   const vk = props.itemValue;
   const map = new Map();
   for (const item of items) {
@@ -161,13 +203,14 @@ function appendPreserveIds(items) {
     if (id == null || id === '') continue;
     map.set(String(id), item);
   }
+
   const bucket = getSearchBucket();
   if (!bucket) return Array.from(map.values());
   for (const selectedId of props.searchPreserveIds) {
     const key = String(selectedId);
     if (map.has(key)) continue;
-    const record = bucket[key];
-    if (!record) continue;
+    const record = userRecordForId(key);
+    if (!record || !shouldShowUserRecord(record, query)) continue;
     map.set(key, pickerRow(record, key));
   }
   return Array.from(map.values());
@@ -181,15 +224,7 @@ async function syncRemoteSearchOptions(rawSearch = '') {
   const minLen = Math.max(1, Number(props.searchMinLength) || 3);
 
   if (!query || query.length < minLen) {
-    if (collection === 'user') {
-      const sid = String(globalStore.currentUserId || '').trim();
-      const bucket = getSearchBucket();
-      const baseline = sid && bucket ? bucket[sid] : null;
-      const items = baseline ? [pickerRow(baseline, sid)] : [];
-      remoteItems.value = appendPreserveIds(items);
-    } else {
-      remoteItems.value = appendPreserveIds([]);
-    }
+    remoteItems.value = appendPreserveIds(currentUserBaselineItems(query), query);
     return;
   }
 
@@ -208,8 +243,30 @@ async function syncRemoteSearchOptions(rawSearch = '') {
         return id ? pickerRow(row, id) : null;
       })
       .filter(Boolean);
-    remoteItems.value = appendPreserveIds(items);
-    // Ответ search — { code, title }; в store[collection] не пишем (см. mergeDeep / getStoreRecord).
+    remoteItems.value = appendPreserveIds([...currentUserBaselineItems(query), ...items], query);
+    const bucket = getSearchBucket();
+    const storeField = String(props.itemTitle || 'title').trim();
+    if (bucket && storeField && storeField !== '_id') {
+      for (const row of rows) {
+        const id = idFromSearchRow(row);
+        const text = String(row?.[storeField] ?? row?.title ?? '').trim();
+        if (!id || !text) continue;
+        const prev = bucket[id] || globalStore.store.user?.[id] || {};
+        if (!bucket[id]) bucket[id] = { _id: id };
+        if (collection === 'user' && storeField === 'login') {
+          const title = String(row?.title ?? text).trim();
+          const login =
+            normalizeUserLogin(prev.login) || loginFromSearchTitle(title) || text;
+          bucket[id].login = login;
+          if (title) bucket[id].displayTitle = title;
+          const fio = fioFromSearchTitle(title);
+          if (fio) bucket[id]._fio = fio;
+          if (prev.pp && typeof prev.pp === 'object') bucket[id].pp = prev.pp;
+        } else {
+          bucket[id][storeField] = text;
+        }
+      }
+    }
   } catch {
     // оставляем предыдущий список
   } finally {
@@ -231,6 +288,19 @@ const staticItems = computed(() => {
       if (Array.isArray(raw)) items = raw;
     }
   }
+  // При remote search выбранные id подмешивает resolvedItems; иначе String([id]) → id в подписи
+  if (remoteSearchEnabled.value) return items;
+
+  const model = props.modelValue;
+  if (Array.isArray(model) && props.multiple) {
+    for (const rawId of model) {
+      const id = String(rawId ?? '').trim();
+      if (!id || items.some((row) => String(row?.[vk] ?? '') === id)) continue;
+      items.push({ [tk]: id, [vk]: id });
+    }
+    return items;
+  }
+
   const current = normalizePersistValue(props.modelValue);
   if (current && !items.some((row) => String(row?.[vk] ?? '') === current)) {
     const match = items.find((row) => String(row?.[tk] ?? '') === current);
@@ -241,14 +311,34 @@ const staticItems = computed(() => {
 
 const resolvedItems = computed(() => {
   if (!remoteSearchEnabled.value) return staticItems.value;
+  const vk = props.itemValue;
   const prefix = staticItems.value;
-  const seen = new Set(prefix.map((row) => String(row?.[props.itemValue] ?? '')));
+  const seen = new Set(prefix.map((row) => String(row?.[vk] ?? '')));
   const merged = [...prefix];
   for (const row of remoteItems.value) {
-    const id = String(row?.[props.itemValue] ?? '');
+    const id = String(row?.[vk] ?? '');
     if (!id || seen.has(id)) continue;
     seen.add(id);
+    merged.push(pickerRow(row, id));
+  }
+  const query = String(search.value || '').trim();
+  for (const selectedId of props.searchPreserveIds) {
+    const key = String(selectedId);
+    if (!key || seen.has(key)) continue;
+    const record = userRecordForId(key);
+    if (!record || !shouldShowUserRecord(record, query)) continue;
+    const row = pickerRow(record, key);
     merged.push(row);
+    seen.add(key);
+  }
+  if (searchCollectionName.value === 'user') {
+    const sid = String(globalStore.currentUserId || '').trim();
+    if (sid && !seen.has(sid)) {
+      const record = userRecordForId(sid);
+      if (record && shouldShowUserRecord(record, query)) {
+        merged.push(pickerRow(record, sid));
+      }
+    }
   }
   return merged;
 });
@@ -294,8 +384,29 @@ function displayTextForValue(val) {
 }
 
 function syncSearchInputFromModel() {
+  if (props.multiple && props.hideSelectionChips) return;
   const next = displayTextForValue(props.modelValue);
   if (search.value !== next) search.value = next;
+}
+
+function clearSearchInput() {
+  if (search.value !== '') search.value = '';
+}
+
+function selectedIdSet() {
+  const raw = props.modelValue;
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.map((v) => String(v)).filter(Boolean));
+}
+
+/** Vuetify после выбора подставляет в search item-value (_id), а не подпись */
+function isSearchLeakedSelectionId(value) {
+  if (!props.multiple || !props.hideSelectionChips) return false;
+  const s = String(value || '').trim();
+  if (!s) return false;
+  if (selectedIdSet().has(s)) return true;
+  const vk = props.itemValue;
+  return resolvedItems.value.some((row) => String(row?.[vk] ?? '') === s);
 }
 
 function clearOutlineFlash() {
@@ -355,25 +466,46 @@ watch(
   () => [props.modelValue, resolvedItems.value],
   () => {
     if (menu.value) return;
+    if (props.multiple && props.hideSelectionChips) return;
     syncSearchInputFromModel();
   },
   { immediate: true },
 );
 
+watch(
+  () => props.modelValue,
+  () => {
+    if (!props.multiple || !props.hideSelectionChips) return;
+    if (menu.value) return;
+    clearSearchInput();
+  },
+  { deep: true },
+);
+
 watch(menu, (open) => {
   if (open && props.syncMenu) {
-    search.value = '';
+    clearSearchInput();
     if (remoteSearchEnabled.value) {
       void syncRemoteSearchOptions('');
     }
     return;
   }
-  if (!open) syncSearchInputFromModel();
+  if (!open) {
+    if (props.multiple && props.hideSelectionChips) {
+      clearSearchInput();
+      return;
+    }
+    syncSearchInputFromModel();
+  }
 });
 
 watch(
   () => search.value,
   (value) => {
+    if (isSearchLeakedSelectionId(value)) {
+      clearSearchInput();
+      return;
+    }
     if (!remoteSearchEnabled.value) return;
     void syncRemoteSearchOptions((value || '').trim());
   },
@@ -383,13 +515,31 @@ watch(
   () => [props.searchPreserveIds, props.searchCollection, props.contextKey],
   () => {
     if (!remoteSearchEnabled.value) return;
+    hydrateSearchBucketFromStore();
     void syncRemoteSearchOptions((search.value || '').trim());
   },
   { deep: true },
 );
 
+function hydrateSearchBucketFromStore() {
+  const bucket = getSearchBucket();
+  if (!bucket || searchCollectionName.value !== 'user') return;
+  const tk = props.itemTitle;
+  if (tk !== 'login') return;
+  for (const selectedId of props.searchPreserveIds) {
+    const key = String(selectedId);
+    if (!key) continue;
+    const login = String(globalStore.store.user?.[key]?.login ?? '').trim();
+    if (!login) continue;
+    if (!bucket[key]) bucket[key] = { _id: key };
+    if (!String(bucket[key].login ?? '').trim()) bucket[key].login = login;
+  }
+}
+
 onMounted(() => {
-  if (remoteSearchEnabled.value) void syncRemoteSearchOptions((search.value || '').trim());
+  if (!remoteSearchEnabled.value) return;
+  hydrateSearchBucketFromStore();
+  void syncRemoteSearchOptions((search.value || '').trim());
 });
 
 onUnmounted(() => {
@@ -429,6 +579,10 @@ async function persistFromPicker(val) {
 function handleModelUpdate(val) {
   const normalized = val == null || val === '' ? null : val;
   emit('update:modelValue', normalized);
+  if (props.multiple && props.hideSelectionChips) {
+    clearSearchInput();
+    void nextTick(() => clearSearchInput());
+  }
   if (!persistEnabled.value) return;
   void persistFromPicker(val);
 }
