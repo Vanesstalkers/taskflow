@@ -50,6 +50,7 @@
     result.access = domain.collections.utils.fieldAccess.getSchemaAccessMap(schema, viewer, {
       collection: col,
       entityId: sid,
+      intent: 'write',
     });
     return result;
   },

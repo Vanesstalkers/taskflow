@@ -51,6 +51,9 @@ export function useEntityView(props, emit) {
       if (patch && typeof patch === 'object') {
         globalStore.setData({ lst: res.lst || {}, store: patch });
       }
+      if (props.collection === 'task') {
+        globalStore.setTaskSchema(res.schema);
+      }
     } catch (error) {
       loadError.value = error.message || 'Не удалось загрузить задачу';
     } finally {

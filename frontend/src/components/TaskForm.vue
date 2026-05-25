@@ -12,6 +12,7 @@
             collection="task"
             :_id="taskId"
             field="title"
+            access-path="title"
             :error-message="panelFieldErrors.title"
             :context-key="taskId"
             @saved="panelFieldErrors.title = ''"

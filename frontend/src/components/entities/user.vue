@@ -190,18 +190,12 @@ const confirmPassword = ref('');
 const savingPassword = ref(false);
 const passwordMessage = ref('');
 const passwordMessageType = ref('error');
+/** Карта access с getEntity (intent write на бэкенде). */
+const entityAccess = ref({});
 
 const login = computed(() => String(record.value?.login ?? '').trim());
 
-/** Бэкенд маскирует недоступное поле как password: null (fieldAccess). */
-const canChangePassword = computed(() => {
-  const userId = String(props.entityId || '').trim();
-  if (!userId || loading.value) return false;
-  const rec = globalStore.store.user?.[userId] ?? record.value;
-  if (!rec || typeof rec !== 'object') return false;
-  if (!('password' in rec)) return true;
-  return rec.password !== null;
-});
+const canChangePassword = computed(() => entityAccess.value.password === 'write');
 
 async function savePassword() {
   const entityId = String(props.entityId || '').trim();
@@ -302,6 +296,8 @@ async function loadUser() {
     if (res?.store && typeof res.store === 'object') {
       globalStore.setData({ lst: res.lst || {}, store: res.store });
     }
+    entityAccess.value =
+      res?.access && typeof res.access === 'object' && !Array.isArray(res.access) ? res.access : {};
   } catch (error) {
     loadError.value = error.message || 'Не удалось загрузить пользователя';
   } finally {

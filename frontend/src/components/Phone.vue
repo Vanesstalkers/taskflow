@@ -1,5 +1,5 @@
 <template>
-  <div class="app-phone" :class="{ 'app-phone--disabled': disabled }">
+  <div class="app-phone" :class="{ 'app-phone--disabled': phoneDisabled }">
     <div
       class="app-phone__row d-flex align-stretch"
       :class="{
@@ -14,12 +14,13 @@
           :collection="collection"
           :_id="_id"
           field="code"
+          :access-path="codeAccessPath"
           :field-label="codeLabel"
           reserve-label-space
           suppress-outline
           empty-label="+7"
           :required="false"
-          :disabled="disabled"
+          :disabled="phoneDisabled"
           :context-key="`${contextKey}:code`"
           :format-display="formatCode"
           :parse-value="parseCode"
@@ -37,8 +38,9 @@
         :collection="collection"
         :_id="_id"
         field="number"
+        :access-path="numberAccessPath"
         :label="label"
-        :disabled="disabled"
+        :disabled="phoneDisabled"
         :loading="loading"
         :hint="hint"
         suppress-outline
@@ -60,6 +62,7 @@
 import { computed, onUnmounted, ref, useAttrs, watch } from 'vue';
 import Input from './Input.vue';
 import InputInline from './InputInline.vue';
+import { buildTaskAccessPath, isTaskFieldDisabled } from '../utils/taskFieldAccess.js';
 import { formatCode, formatNational, parseCode, parseNational } from '../utils/phoneFormat.js';
 
 defineOptions({ inheritAttrs: false });
@@ -77,10 +80,28 @@ const props = defineProps({
   /** Подпись поля кода (может быть пустой — место под label сохраняется) */
   codeLabel: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
+  /** База пути в taskSchema, например createdSubdivisionLinks.phoneList */
+  accessPathBase: { type: String, default: '' },
   hint: { type: String, default: '' },
   contextKey: { type: String, default: '' },
   loading: { type: Boolean, default: false },
 });
+
+const phoneDisabled = computed(
+  () =>
+    Boolean(props.disabled) ||
+    (props.accessPathBase
+      ? isTaskFieldDisabled(buildTaskAccessPath([props.accessPathBase, 'code'])) ||
+        isTaskFieldDisabled(buildTaskAccessPath([props.accessPathBase, 'number']))
+      : false),
+);
+
+const codeAccessPath = computed(() =>
+  props.accessPathBase ? buildTaskAccessPath([props.accessPathBase, 'code']) : '',
+);
+const numberAccessPath = computed(() =>
+  props.accessPathBase ? buildTaskAccessPath([props.accessPathBase, 'number']) : '',
+);
 
 const attrs = useAttrs();
 const inputAttrs = computed(() => {

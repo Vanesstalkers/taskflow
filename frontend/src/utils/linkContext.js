@@ -74,6 +74,15 @@ export function findTaskLinkContext(collection, parentId, store) {
         return { taskType, schemaPath: ['createdUserLinks', 'pp'] };
       }
     }
+
+    for (const subId of Object.keys(task.createdSubdivisionLinks || {})) {
+      if (!hasLinkKey(task.createdSubdivisionLinks, subId)) continue;
+      const sub = store.subdivision?.[subId];
+      if (!sub) continue;
+      if (collection === 'phone' && hasLinkKey(sub.phoneList, pid)) {
+        return { taskType, schemaPath: ['createdSubdivisionLinks'] };
+      }
+    }
   }
 
   return null;

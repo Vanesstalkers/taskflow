@@ -30,6 +30,7 @@
             :_id="_id"
             field="name"
             label="Название"
+            :access-path="`${SUBDIVISION_ACCESS}.name`"
             :context-key="_id"
           />
           <Textarea
@@ -38,7 +39,23 @@
             :_id="_id"
             field="description"
             label="Описание"
+            :access-path="`${SUBDIVISION_ACCESS}.description`"
             :context-key="_id"
+          />
+          <PhoneList
+            v-if="_id"
+            :parent-id="_id"
+            parent-collection="subdivision"
+            :task-type="task.taskType"
+            :schema-path="['createdSubdivisionLinks']"
+          />
+          <PhoneList
+            v-if="_id"
+            :parent-id="_id"
+            link-field="phoneListExtra"
+            parent-collection="subdivision"
+            :task-type="task.taskType"
+            :schema-path="['createdSubdivisionLinks']"
           />
         </div>
       </template>
@@ -51,6 +68,9 @@ import { computed } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import Textarea from '../Textarea.vue';
+import PhoneList from '../complex/Phone.vue';
+
+const SUBDIVISION_ACCESS = 'createdSubdivisionLinks';
 
 const props = defineProps({
   task: { type: Object, required: true },

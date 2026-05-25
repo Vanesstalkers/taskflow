@@ -500,6 +500,7 @@ const loadTask = async (_id) => {
     if (!patch || typeof patch !== 'object') return;
 
     globalStore.setData({ lst: res.lst || {}, store: patch });
+    globalStore.setTaskSchema(res.schema);
 
     if (!globalStore.store.task[id]) return;
   } catch (error) {

@@ -29,7 +29,7 @@
       :multiple="multiple"
       clearable
       hide-details="auto"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       @update:model-value="handleModelUpdate"
     >
       <template v-if="useCustomItemRow" #item="{ props: listItemProps, item }">
@@ -46,6 +46,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getApi } from '../main.js';
+import { useFieldDisabled } from '../composables/useFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
@@ -72,6 +73,7 @@ const props = defineProps({
   label: { type: String, default: '' },
   placeholder: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
+  accessPath: { type: String, default: '' },
   syncMenu: { type: Boolean, default: false },
   multiple: { type: Boolean, default: false },
   density: { type: String, default: 'compact' },
@@ -96,6 +98,7 @@ const props = defineProps({
 });
 
 const devAnchorId = useDevAnchorId(props);
+const fieldDisabled = useFieldDisabled(props);
 
 const emit = defineEmits(['update:modelValue']);
 
@@ -547,7 +550,7 @@ onUnmounted(() => {
 });
 
 async function persistFromPicker(val) {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
 
   const toSave = normalizePersistValue(val);
   if (toSave === lastCommitted.value) return;

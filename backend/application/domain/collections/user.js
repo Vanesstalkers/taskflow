@@ -24,11 +24,17 @@
   schema: () => ({
     login: '',
     password: {
-      access: (viewer, { entityId } = {}) => {
-        if (viewer?.roles?.includes('admin')) return true;
-        const targetId = String(entityId || '').trim();
-        const viewerId = String(viewer?._id || '').trim();
-        return targetId.length > 0 && targetId === viewerId;
+      /** store/getEntity: hidden (значение не уходит на фронт); intent write — право смены пароля */
+      access: (viewer, { entityId, intent } = {}) => {
+        const canEdit =
+          viewer?.roles?.includes('admin') ||
+          (() => {
+            const targetId = String(entityId || '').trim();
+            const viewerId = String(viewer?._id || '').trim();
+            return targetId.length > 0 && targetId === viewerId;
+          })();
+        if (intent === 'write') return !!canEdit;
+        return false;
       },
       onUpdate: async (value) => await metarhia.metautil.hashPassword(value),
     },

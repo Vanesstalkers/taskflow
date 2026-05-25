@@ -13,7 +13,7 @@
       :label="label"
       variant="underlined"
       hide-details="auto"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       :loading="loading || saving"
       :hint="saveError ? '' : hint"
       :persistent-hint="!saveError && !!String(hint || '').trim()"
@@ -27,6 +27,7 @@
 
 <script setup>
 import { onUnmounted, ref, watch } from 'vue';
+import { useFieldDisabled } from '../composables/useFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
@@ -48,6 +49,8 @@ const props = defineProps({
   devId: { type: String, default: '' },
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
+  /** Путь в store.taskSchema (getTask), например createdSubdivisionLinks.name */
+  accessPath: { type: String, default: '' },
   hint: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
@@ -63,6 +66,7 @@ const props = defineProps({
 });
 
 const devAnchorId = useDevAnchorId(props);
+const fieldDisabled = useFieldDisabled(props);
 
 const emit = defineEmits(['commit', 'save-success', 'save-error']);
 
@@ -160,7 +164,7 @@ onUnmounted(() => {
 });
 
 async function persist() {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
 
   if (props.ephemeral) {
     emit('commit');
@@ -194,7 +198,7 @@ async function persist() {
 }
 
 function onKeydown(event) {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
   if (props.ephemeral) {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -208,7 +212,7 @@ function onKeydown(event) {
 }
 
 function onBlur() {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
   persist();
 }
 </script>

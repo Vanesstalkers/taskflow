@@ -6,8 +6,14 @@ export const useStore = defineStore('store', {
     lst: {},
     lstLoading: {},
     store: { user: {}, task: {} },
+    /** Дерево прав доступа по схеме задачи (getTask schema) */
+    taskSchema: {},
   }),
   actions: {
+    setTaskSchema(schema) {
+      this.taskSchema = schema && typeof schema === 'object' && !Array.isArray(schema) ? schema : {};
+    },
+
     setData({ store = {}, lst = {}, currentUserId = '' }) {
       this.currentUserId = String(currentUserId || this.currentUserId || '');
 

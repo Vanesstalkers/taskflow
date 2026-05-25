@@ -13,7 +13,7 @@
       :label="label"
       density="comfortable"
       hide-details="auto"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       :loading="loading || saving"
       :hint="saveError ? '' : hint"
       :persistent-hint="!saveError && !!String(hint || '').trim()"
@@ -25,8 +25,9 @@
 </template>
 
 <script setup>
-import { onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
+import { buildTaskAccessPath, isTaskFieldDisabled } from '../utils/taskFieldAccess.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -52,9 +53,32 @@ const props = defineProps({
   ephemeral: { type: Boolean, default: false },
   /** Внешний индикатор загрузки */
   loading: { type: Boolean, default: false },
+  taskType: { type: String, default: '' },
+  schemaPath: { type: [String, Array], default: () => [] },
+  linkField: { type: String, default: '' },
+  /** Явный путь в taskSchema; иначе собирается из schemaPath + linkField + field */
+  accessPath: { type: String, default: '' },
 });
 
 const devAnchorId = useDevAnchorId(props);
+
+const resolvedAccessPath = computed(() => {
+  if (props.accessPath) return props.accessPath;
+  const base = Array.isArray(props.schemaPath)
+    ? props.schemaPath.map((k) => String(k).trim()).filter(Boolean)
+    : String(props.schemaPath ?? '')
+        .trim()
+        .split('.')
+        .map((k) => k.trim())
+        .filter(Boolean);
+  return buildTaskAccessPath([...base, props.linkField, props.field]);
+});
+
+const fieldDisabled = computed(
+  () =>
+    Boolean(props.disabled) ||
+    (resolvedAccessPath.value ? isTaskFieldDisabled(resolvedAccessPath.value) : false),
+);
 
 const emit = defineEmits(['commit']);
 
@@ -115,7 +139,7 @@ onUnmounted(() => {
 });
 
 async function persist() {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
 
   if (props.ephemeral) {
     emit('commit');
@@ -135,7 +159,17 @@ async function persist() {
   saveError.value = '';
   try {
     const { collection, _id, field } = props;
-    await saveField({ collection, _id, data: { [field]: next } });
+    const schemaPath = Array.isArray(props.schemaPath)
+      ? props.schemaPath.map((k) => String(k).trim()).filter(Boolean)
+      : [];
+    await saveField({
+      collection,
+      _id,
+      data: { [field]: next },
+      taskType: props.taskType || undefined,
+      schemaPath: schemaPath.length > 0 ? schemaPath : undefined,
+      linkField: props.linkField || undefined,
+    });
     lastCommitted.value = next;
     flashSuccess();
   } catch (error) {

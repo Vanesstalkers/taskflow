@@ -40,6 +40,42 @@
     return this.resolveFieldDef(domain.collections[collection].schema()[linkField]);
   },
 
+  /**
+   * Схема коллекции для updateField в контексте задачи (вложенный phoneList и т.п.).
+   * linkField — имя связи у родителя (phoneList / phoneListExtra), иначе берётся первое совпадение по collection.
+   */
+  resolveUpdateSchema({ collection, taskType, schemaPath = [], linkField }) {
+    const col = String(collection || '').trim();
+    const typeKey = String(taskType || '').trim();
+    if (!typeKey || !col) return domain.collections[col]?.schema?.() || {};
+
+    const segments = Array.isArray(schemaPath) ? schemaPath.map((k) => String(k).trim()).filter(Boolean) : [];
+    let currentSchema = domain.collections.task[typeKey].schema();
+
+    for (const key of segments) {
+      const def = this.resolveFieldDef(currentSchema[key]);
+      if (!def?.collection) return domain.collections[col].schema();
+      currentSchema = this.schemaForLinkField(def, def.collection);
+    }
+
+    const linkKey = String(linkField || '').trim();
+    if (linkKey && linkKey in currentSchema) {
+      const def = this.resolveFieldDef(currentSchema[linkKey]);
+      if (def?.collection === col) {
+        return this.schemaForLinkField(def, col);
+      }
+    }
+
+    for (const fieldDef of Object.values(currentSchema)) {
+      const resolved = this.resolveFieldDef(fieldDef);
+      if (resolved?.collection === col) {
+        return this.schemaForLinkField(fieldDef, col);
+      }
+    }
+
+    return domain.collections[col].schema();
+  },
+
   schemaForLinkField(fieldDef, nestedColl) {
     const resolved = this.resolveFieldDef(fieldDef);
     if (!resolved?.collection) {
@@ -83,8 +119,8 @@
         continue;
       }
       const fieldAccess = domain.collections.utils.fieldAccess;
-      if (fieldAccess.isFieldHidden(fieldDef, viewer, { ...fieldAccessContext, fieldName: key })) continue;
-      if (fieldAccess.shouldOmitValueFromStore(fieldDef, key)) continue;
+      const fieldCtx = { ...fieldAccessContext, fieldName: key };
+      if (fieldAccess.shouldOmitValueFromStore(fieldDef, viewer, fieldCtx)) continue;
       if (key in doc) out[key] = doc[key];
     }
 

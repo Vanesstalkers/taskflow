@@ -21,7 +21,7 @@
       hide-details="auto"
       class="inline-edit-text__field"
       :class="inputClass"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       :error="!!combinedError"
       :error-messages="combinedError ? [combinedError] : []"
       autofocus
@@ -52,6 +52,7 @@
 
 <script setup>
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
+import { useFieldDisabled } from '../composables/useFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
@@ -63,6 +64,7 @@ const props = defineProps({
   /** Подпись, если modelValue пустой */
   emptyLabel: { type: String, default: '—' },
   disabled: { type: Boolean, default: false },
+  accessPath: { type: String, default: '' },
   hint: { type: String, default: '' },
   displayTag: { type: String, default: 'span' },
   displayClass: { type: String, default: '' },
@@ -102,6 +104,7 @@ const fieldLabelText = computed(() => {
 const fieldLabelDisplay = computed(() => fieldLabelText.value);
 
 const devAnchorId = useDevAnchorId(props);
+const fieldDisabled = useFieldDisabled(props);
 
 const emit = defineEmits(['saved', 'update:modelValue', 'save-success', 'save-error']);
 
@@ -196,7 +199,7 @@ watch(
 );
 
 const startEdit = async () => {
-  if (props.disabled || saving.value || editing.value) return;
+  if (fieldDisabled.value || saving.value || editing.value) return;
   saveErrorInternal.value = '';
   draft.value = displayText.value;
   editing.value = true;

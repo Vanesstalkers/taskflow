@@ -6,11 +6,11 @@
     const fetchedEntity = new Set();
 
     const document = await db.mongodb.findOne('task', { _id: new npm.mongodb.ObjectId(_id) });
-    const schema = domain.collections.task[document.taskType].schema();
+    const taskTypeSchema = domain.collections.task[document.taskType].schema();
 
     const task = { _id: String(document._id) };
 
-    for (const [key, value] of Object.entries(schema)) {
+    for (const [key, value] of Object.entries(taskTypeSchema)) {
       if (key in document) task[key] = document[key];
       if (value.collection && !task[key]) task[key] = {};
     }
@@ -23,12 +23,17 @@
       lstNameSet,
       collectionName: 'task',
       documents: [document],
-      schema,
+      schema: taskTypeSchema,
       viewer,
     });
 
     result.store.task = { [task._id]: task };
     result.lst = Object.fromEntries([...lstNameSet].map((name) => [name, domain.lst[name].items]));
+    result.schema = domain.collections.utils.flattenTaskSchema.build({
+      taskType: document.taskType,
+      viewer,
+      entityId: task._id,
+    });
 
     return result;
   },

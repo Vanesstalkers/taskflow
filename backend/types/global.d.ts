@@ -47,6 +47,8 @@ declare global {
       _id: string;
       data: Record<string, unknown>;
       taskType?: string;
+      schemaPath?: string[];
+      linkField?: string;
     }): Promise<StatusResult>;
 
     /** Одна связь в мапе (например userLinks): add / remove по ключу targetId */

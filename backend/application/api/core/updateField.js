@@ -1,12 +1,15 @@
 ({
   access: 'public',
-  method: async ({ collection, _id, data, taskType }) => {
-    const schema = taskType
-      ? domain.collections.task[taskType].schema()
-      : domain.collections[collection].schema();
+  method: async ({ collection, _id, data, taskType, schemaPath, linkField }) => {
     const linkSchema = domain.collections.utils.linkSchema;
+    const schema = linkSchema.resolveUpdateSchema({
+      collection,
+      taskType,
+      schemaPath,
+      linkField,
+    });
     const viewer = await domain.collections.utils.fieldAccess.loadViewer(context.session.state.userId);
-    const accessContext = { collection, entityId: String(_id || '').trim() };
+    const accessContext = { collection, entityId: String(_id || '').trim(), intent: 'write' };
     domain.collections.utils.fieldAccess.assertFieldsWritable(schema, data, viewer, accessContext);
 
     const setPayload = {};
@@ -42,11 +45,9 @@
         [_id]: {
           ...setPayload,
           updatedAt,
-          ...(await domain.collections.utils.getHiddenFields({
-            collection,
-            taskType,
-            viewer,
-            accessContext,
+          ...(await domain.collections.utils.fieldAccess.getHiddenFieldsFromSchema(schema, viewer, {
+            ...accessContext,
+            intent: 'write',
           })),
         },
       },

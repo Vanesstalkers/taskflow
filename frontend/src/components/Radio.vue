@@ -15,7 +15,7 @@
       density="compact"
       hide-details="auto"
       class="multi-entity-picker__radio-group"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       :error="!!saveError"
       :error-messages="saveError ? [saveError] : []"
       :hint="saveError ? '' : hint"
@@ -34,6 +34,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
+import { useFieldDisabled } from '../composables/useFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
@@ -55,6 +56,7 @@ const props = defineProps({
   itemTitle: { type: String, default: 'title' },
   itemValue: { type: String, default: 'code' },
   disabled: { type: Boolean, default: false },
+  accessPath: { type: String, default: '' },
   hint: { type: String, default: '' },
   collection: { type: String, default: '' },
   _id: { type: String, default: '' },
@@ -71,6 +73,7 @@ const props = defineProps({
 });
 
 const devAnchorId = useDevAnchorId(props);
+const fieldDisabled = useFieldDisabled(props);
 
 const emit = defineEmits(['update:modelValue']);
 
@@ -219,7 +222,7 @@ async function handleUpdate(val) {
     return;
   }
 
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
 
   const toSave = valueForPersistence(val);
   if (toSave === lastCommitted.value) return;

@@ -13,7 +13,7 @@
       :label="label"
       variant="outlined"
       :rows="rows"
-      :disabled="disabled || saving"
+      :disabled="fieldDisabled || saving"
       hide-details="auto"
       :hint="saveError ? '' : hint"
       :persistent-hint="!saveError && !!String(hint || '').trim()"
@@ -27,6 +27,7 @@
 
 <script setup>
 import { onUnmounted, ref, watch } from 'vue';
+import { useFieldDisabled } from '../composables/useFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
@@ -47,12 +48,14 @@ const props = defineProps({
   label: { type: String, default: '' },
   rows: { type: [Number, String], default: 4 },
   disabled: { type: Boolean, default: false },
+  accessPath: { type: String, default: '' },
   hint: { type: String, default: '' },
   /** Смена ключа сбрасывает подсветку, ошибку и базовое значение для пропуска лишних запросов */
   contextKey: { type: String, default: '' },
 });
 
 const devAnchorId = useDevAnchorId(props);
+const fieldDisabled = useFieldDisabled(props);
 
 const saving = ref(false);
 const saveError = ref('');
@@ -111,7 +114,7 @@ onUnmounted(() => {
 });
 
 async function persist() {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
   const next = String(text.value).trim();
   if (next === lastCommitted.value) return;
 
@@ -137,14 +140,14 @@ async function persist() {
 }
 
 function onKeydown(event) {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
   if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
   event.preventDefault();
   persist();
 }
 
 function onBlur() {
-  if (props.disabled || saving.value) return;
+  if (fieldDisabled.value || saving.value) return;
   persist();
 }
 </script>

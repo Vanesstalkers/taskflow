@@ -145,10 +145,9 @@
     }
   },
 
-  shouldOmitValueFromStore(fieldDef, key) {
-    if (key === 'password') return true;
-    const resolved = this.resolveFieldDef(fieldDef);
-    return typeof resolved?.onUpdate === 'function';
+  /** Не отдавать значение в store: уровень access === hidden (см. resolveAccessLevel). */
+  shouldOmitValueFromStore(fieldDef, viewer, accessContext = {}) {
+    return this.isFieldHidden(fieldDef, viewer, accessContext);
   },
 
   getHiddenFieldsFromSchema(schema, viewer, accessContext = {}) {

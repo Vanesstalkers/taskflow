@@ -27,6 +27,7 @@
           :_id="ppId"
           field="lastName"
           label="Фамилия"
+          :access-path="ppAccessPath('lastName')"
           :context-key="ppId"
         />
         <Input
@@ -36,6 +37,7 @@
           :_id="ppId"
           field="firstName"
           label="Имя"
+          :access-path="ppAccessPath('firstName')"
           :context-key="ppId"
         />
         <Input
@@ -45,6 +47,7 @@
           :_id="ppId"
           field="middleName"
           label="Отчество"
+          :access-path="ppAccessPath('middleName')"
           :context-key="ppId"
         />
         <Input
@@ -54,6 +57,7 @@
           :_id="ppId"
           field="birthDate"
           label="Дата рождения"
+          :access-path="ppAccessPath('birthDate')"
           :context-key="ppId"
         />
         <Radio
@@ -64,69 +68,18 @@
           collection="pp"
           :_id="ppId"
           field="gender"
+          :access-path="ppAccessPath('gender')"
           pick-stored-as-empty="unspecified"
           empty-stored-value=""
           :context-key="`${ppId}:gender`"
         />
-        <ComplexBlock
-          v-if="isShown('phoneList') && ppId"
-          :model-value="phoneListKeyList(ppId)"
-          :list="{ lstName: 'phoneTypes' }"
-          :persist="{
-            collection: 'phone',
-            parentCollection: 'pp',
-            parentId: ppId,
-            linkField: 'phoneList',
-            taskType,
-            schemaPath: phoneLinkSchemaPath,
-          }"
-          :add="{
-            addType: 'select',
-            addPlacement: 'inline',
-            pickCreatesDocument: true,
-            pickDocumentField: 'phoneType',
-            showCreateNewOption: false,
-          }"
-          :ui="{ fullWidthLabels: true }"
-          :texts="{
-            blockTitle: 'Телефоны',
-            emptyText: 'Телефоны не добавлены',
-            addFieldLabel: 'Тип телефона',
-            addPlaceholder: 'Выберите тип из списка',
-          }"
-        >
-          <template #label="{ _id: phoneId, record: phoneRecord = {} }">
-            <div class="d-flex flex-column ga-2 align-self-stretch w-100">
-              <Select
-                :model-value="phoneRecord.phoneType || ''"
-                lst-name="phoneTypes"
-                label="Тип"
-                density="comfortable"
-                :single-line="false"
-                collection="phone"
-                :_id="phoneId"
-                field="phoneType"
-                :context-key="`${phoneId}:phoneType`"
-              />
-              <Phone
-                v-model:code="phoneRecord.code"
-                v-model:number="phoneRecord.number"
-                collection="phone"
-                :_id="phoneId"
-                label="Номер"
-                :context-key="phoneId"
-              />
-              <Checkbox
-                :model-value="Boolean(phoneRecord?.active)"
-                label="Активный"
-                :_id="phoneId"
-                collection="phone"
-                field="active"
-                :context-key="`${phoneId}:active`"
-              />
-            </div>
-          </template>
-        </ComplexBlock>
+        <PhoneList
+          v-if="isShown('phoneList')"
+          :parent-id="ppId"
+          parent-collection="pp"
+          :task-type="taskType"
+          :schema-path="phoneLinkSchemaPath"
+        />
       </div>
     </template>
   </ComplexBlock>
@@ -136,11 +89,10 @@
 import { computed } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
-import Phone from '../Phone.vue';
 import Radio from '../Radio.vue';
-import Select from '../Select.vue';
-import Checkbox from '../Checkbox.vue';
+import PhoneList from './Phone.vue';
 import { useStore } from '../../stores/store.js';
+import { buildTaskAccessPath } from '../../utils/taskFieldAccess.js';
 
 const props = defineProps({
   parentId: { type: String, required: true },
@@ -164,6 +116,10 @@ const linkSchemaPathArr = computed(() => {
 
 const phoneLinkSchemaPath = computed(() => [...linkSchemaPathArr.value, 'pp']);
 
+function ppAccessPath(field) {
+  return buildTaskAccessPath([...linkSchemaPathArr.value, 'pp', field]);
+}
+
 const showAll = computed(() => props.showFields.includes('*'));
 const shownSet = computed(() => new Set(props.showFields));
 
@@ -177,7 +133,4 @@ const ppIds = computed(() =>
   ),
 );
 
-function phoneListKeyList(ppId) {
-  return Object.keys(globalStore.store.pp?.[ppId]?.phoneList || {}).filter(Boolean);
-}
 </script>
