@@ -12,7 +12,6 @@
             collection="task"
             :_id="taskId"
             field="title"
-            access-path="title"
             :error-message="panelFieldErrors.title"
             :context-key="taskId"
             @saved="panelFieldErrors.title = ''"
@@ -149,6 +148,8 @@ import Input from './Input.vue';
 import InputFile from './InputFile.vue';
 import InputInline from './InputInline.vue';
 import { resolveTaskTypeMainComponent } from './tasks/registry.js';
+import { provideTaskFieldAccess } from '../composables/taskFieldAccessContext.js';
+import { provideTaskLinkContext } from '../composables/taskLinkContext.js';
 import { useStore } from '../stores/store.js';
 
 /** Ошибки полей детальной панели (валидация / сеть). */
@@ -185,6 +186,12 @@ const props = defineProps({
 });
 
 defineEmits(['close', 'move', 'add-favourite']);
+
+provideTaskFieldAccess([]);
+provideTaskLinkContext({
+  getSchemaPath: () => [],
+  getTaskType: () => props.task?.taskType,
+});
 
 const taskMainComponent = computed(() => resolveTaskTypeMainComponent(props.task?.taskType));
 

@@ -46,7 +46,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getApi } from '../main.js';
-import { useFieldDisabled } from '../composables/useFieldDisabled.js';
+import { useTaskFieldDisabled } from '../composables/useTaskFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 import { useStore } from '../stores/store.js';
@@ -98,7 +98,7 @@ const props = defineProps({
 });
 
 const devAnchorId = useDevAnchorId(props);
-const fieldDisabled = useFieldDisabled(props);
+const fieldDisabled = useTaskFieldDisabled(props);
 
 const emit = defineEmits(['update:modelValue']);
 

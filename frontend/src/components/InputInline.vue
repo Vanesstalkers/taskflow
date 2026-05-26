@@ -52,7 +52,7 @@
 
 <script setup>
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
-import { useFieldDisabled } from '../composables/useFieldDisabled.js';
+import { useTaskFieldDisabled } from '../composables/useTaskFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
 import { saveField } from '../utils/storeActions.js';
 
@@ -104,7 +104,7 @@ const fieldLabelText = computed(() => {
 const fieldLabelDisplay = computed(() => fieldLabelText.value);
 
 const devAnchorId = useDevAnchorId(props);
-const fieldDisabled = useFieldDisabled(props);
+const fieldDisabled = useTaskFieldDisabled(props);
 
 const emit = defineEmits(['saved', 'update:modelValue', 'save-success', 'save-error']);
 

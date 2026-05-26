@@ -77,8 +77,6 @@
             v-if="_id"
             :parent-id="_id"
             parent-collection="user"
-            :task-type="task.taskType"
-            :link-schema-path="['createdUserLinks']"
             :show-fields="['*']"
           />
         </div>
@@ -93,10 +91,18 @@ import ComplexBlock from '../ComplexBlock.vue';
 import Input from '../Input.vue';
 import InputFile from '../InputFile.vue';
 import PP from '../complex/PP.vue';
+import { provideTaskFieldAccess } from '../../composables/taskFieldAccessContext.js';
+import { provideTaskLinkContext } from '../../composables/taskLinkContext.js';
 import { useStore } from '../../stores/store.js';
 
 const props = defineProps({
   task: { type: Object, required: true },
+});
+
+provideTaskFieldAccess(['createdUserLinks']);
+provideTaskLinkContext({
+  getSchemaPath: () => ['createdUserLinks'],
+  getTaskType: () => props.task.taskType,
 });
 
 const globalStore = useStore();

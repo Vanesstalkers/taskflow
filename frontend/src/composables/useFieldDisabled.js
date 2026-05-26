@@ -1,11 +1,6 @@
-import { computed } from 'vue';
-import { isTaskFieldDisabled } from '../utils/taskFieldAccess.js';
+import { useTaskFieldDisabled } from './useTaskFieldDisabled.js';
 
-/**
- * @param {import('vue').Ref | { disabled?: boolean, accessPath?: string }} props
- */
+/** @deprecated Используйте useTaskFieldDisabled (поддерживает provide/inject). */
 export function useFieldDisabled(props) {
-  return computed(
-    () => Boolean(props.disabled) || (props.accessPath ? isTaskFieldDisabled(props.accessPath) : false),
-  );
+  return useTaskFieldDisabled(props);
 }

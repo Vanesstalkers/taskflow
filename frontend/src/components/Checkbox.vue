@@ -25,9 +25,10 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { onUnmounted, ref, watch } from 'vue';
+import { useResolvedTaskLinkRpc } from '../composables/taskLinkContext.js';
+import { useTaskFieldDisabled } from '../composables/useTaskFieldDisabled.js';
 import { useDevAnchorId } from '../utils/devAnchorId.js';
-import { buildTaskAccessPath, isTaskFieldDisabled } from '../utils/taskFieldAccess.js';
 import { saveField } from '../utils/storeActions.js';
 
 defineOptions({ inheritAttrs: false });
@@ -56,29 +57,13 @@ const props = defineProps({
   taskType: { type: String, default: '' },
   schemaPath: { type: [String, Array], default: () => [] },
   linkField: { type: String, default: '' },
-  /** Явный путь в taskSchema; иначе собирается из schemaPath + linkField + field */
   accessPath: { type: String, default: '' },
 });
 
 const devAnchorId = useDevAnchorId(props);
-
-const resolvedAccessPath = computed(() => {
-  if (props.accessPath) return props.accessPath;
-  const base = Array.isArray(props.schemaPath)
-    ? props.schemaPath.map((k) => String(k).trim()).filter(Boolean)
-    : String(props.schemaPath ?? '')
-        .trim()
-        .split('.')
-        .map((k) => k.trim())
-        .filter(Boolean);
-  return buildTaskAccessPath([...base, props.linkField, props.field]);
-});
-
-const fieldDisabled = computed(
-  () =>
-    Boolean(props.disabled) ||
-    (resolvedAccessPath.value ? isTaskFieldDisabled(resolvedAccessPath.value) : false),
-);
+const fieldDisabled = useTaskFieldDisabled(props);
+const { schemaPath: linkSchemaPath, taskType: linkTaskType, linkField: linkFieldName } =
+  useResolvedTaskLinkRpc(props);
 
 const emit = defineEmits(['commit']);
 
@@ -159,16 +144,14 @@ async function persist() {
   saveError.value = '';
   try {
     const { collection, _id, field } = props;
-    const schemaPath = Array.isArray(props.schemaPath)
-      ? props.schemaPath.map((k) => String(k).trim()).filter(Boolean)
-      : [];
+    const schemaPath = linkSchemaPath.value;
     await saveField({
       collection,
       _id,
       data: { [field]: next },
-      taskType: props.taskType || undefined,
+      taskType: linkTaskType.value || undefined,
       schemaPath: schemaPath.length > 0 ? schemaPath : undefined,
-      linkField: props.linkField || undefined,
+      linkField: linkFieldName.value || undefined,
     });
     lastCommitted.value = next;
     flashSuccess();

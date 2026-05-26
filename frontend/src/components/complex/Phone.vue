@@ -8,7 +8,7 @@
       parentCollection,
       parentId,
       linkField,
-      taskType,
+      taskType: resolvedTaskType,
       schemaPath: schemaPathArr,
       contextKey: parentId,
     }"
@@ -39,7 +39,6 @@
           collection="phone"
           :_id="phoneId"
           field="phoneType"
-          :access-path="`${phoneAccessBase}.phoneType`"
           :context-key="`${phoneId}:phoneType`"
         />
         <PhoneNumber
@@ -48,7 +47,6 @@
           collection="phone"
           :_id="phoneId"
           label="Номер"
-          :access-path-base="phoneAccessBase"
           :context-key="phoneId"
         />
         <Checkbox
@@ -58,10 +56,6 @@
           :_id="phoneId"
           collection="phone"
           field="active"
-          :task-type="taskType"
-          :schema-path="activeSchemaPath"
-          :link-field="linkField"
-          :access-path="`${phoneAccessBase}.active`"
           :context-key="`${phoneId}:active`"
         />
       </div>
@@ -70,20 +64,25 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 import ComplexBlock from '../ComplexBlock.vue';
 import PhoneNumber from '../Phone.vue';
 import Select from '../Select.vue';
 import Checkbox from '../Checkbox.vue';
+import { provideTaskFieldAccess } from '../../composables/taskFieldAccessContext.js';
+import {
+  normalizeSchemaPath,
+  provideTaskLinkContext,
+  TASK_LINK_CONTEXT_KEY,
+} from '../../composables/taskLinkContext.js';
 import { useStore } from '../../stores/store.js';
-import { buildTaskAccessPath } from '../../utils/taskFieldAccess.js';
 
 const props = defineProps({
   parentId: { type: String, required: true },
   parentCollection: { type: String, required: true },
   linkField: { type: String, default: 'phoneList' },
+  /** Переопределение при вызове вне provide */
   taskType: { type: String, default: '' },
-  /** Путь от корня task.schema до схемы родителя связи phoneList */
   schemaPath: { type: [String, Array], default: () => [] },
   showActive: { type: Boolean, default: true },
   texts: { type: Object, default: () => ({}) },
@@ -91,18 +90,27 @@ const props = defineProps({
 });
 
 const globalStore = useStore();
+const parentLinkCtx = inject(TASK_LINK_CONTEXT_KEY, null);
 
 const schemaPathArr = computed(() => {
-  const raw = props.schemaPath;
-  if (Array.isArray(raw)) return raw.map((k) => String(k).trim()).filter(Boolean);
-  const one = String(raw ?? '').trim();
-  return one ? [one] : [];
+  const explicit = normalizeSchemaPath(props.schemaPath);
+  if (explicit.length > 0) return explicit;
+  return parentLinkCtx?.schemaPathSegments?.() ?? [];
 });
 
-/** Путь до схемы родителя phoneList (для updateField вложенной схемы). */
-const activeSchemaPath = computed(() => schemaPathArr.value);
+const resolvedTaskType = computed(() => {
+  const explicit = String(props.taskType ?? '').trim();
+  if (explicit) return explicit;
+  return parentLinkCtx?.taskType?.() ?? '';
+});
 
-const phoneAccessBase = computed(() => buildTaskAccessPath([...schemaPathArr.value, props.linkField]));
+provideTaskFieldAccess(() => [...schemaPathArr.value, props.linkField]);
+
+provideTaskLinkContext({
+  getSchemaPath: () => schemaPathArr.value,
+  getTaskType: () => resolvedTaskType.value,
+  getLinkField: () => props.linkField,
+});
 
 const phoneListKeys = computed(() =>
   Object.keys(

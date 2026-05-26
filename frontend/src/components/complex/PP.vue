@@ -10,7 +10,12 @@
       taskType,
       schemaPath: linkSchemaPathArr,
     }"
-    :add="{ addType: 'button', separateCreateButton: true, maxSelection: 1, minSelection: 1 }"
+    :add="{
+      addType: 'button',
+      separateCreateButton: true,
+      maxSelection: 1,
+      minSelection: 1,
+    }"
     :texts="{
       blockTitle: 'Персональные данные',
       emptyText: 'Данные не добавлены',
@@ -27,7 +32,6 @@
           :_id="ppId"
           field="lastName"
           label="Фамилия"
-          :access-path="ppAccessPath('lastName')"
           :context-key="ppId"
         />
         <Input
@@ -37,7 +41,6 @@
           :_id="ppId"
           field="firstName"
           label="Имя"
-          :access-path="ppAccessPath('firstName')"
           :context-key="ppId"
         />
         <Input
@@ -47,7 +50,6 @@
           :_id="ppId"
           field="middleName"
           label="Отчество"
-          :access-path="ppAccessPath('middleName')"
           :context-key="ppId"
         />
         <Input
@@ -57,7 +59,6 @@
           :_id="ppId"
           field="birthDate"
           label="Дата рождения"
-          :access-path="ppAccessPath('birthDate')"
           :context-key="ppId"
         />
         <Radio
@@ -68,7 +69,6 @@
           collection="pp"
           :_id="ppId"
           field="gender"
-          :access-path="ppAccessPath('gender')"
           pick-stored-as-empty="unspecified"
           empty-stored-value=""
           :context-key="`${ppId}:gender`"
@@ -77,8 +77,6 @@
           v-if="isShown('phoneList')"
           :parent-id="ppId"
           parent-collection="pp"
-          :task-type="taskType"
-          :schema-path="phoneLinkSchemaPath"
         />
       </div>
     </template>
@@ -86,21 +84,21 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import ComplexBlock from '../ComplexBlock.vue';
-import Input from '../Input.vue';
-import Radio from '../Radio.vue';
-import PhoneList from './Phone.vue';
-import { useStore } from '../../stores/store.js';
-import { buildTaskAccessPath } from '../../utils/taskFieldAccess.js';
+import { computed } from "vue";
+import ComplexBlock from "../ComplexBlock.vue";
+import Input from "../Input.vue";
+import Radio from "../Radio.vue";
+import PhoneList from "./Phone.vue";
+import { provideTaskFieldAccess } from "../../composables/taskFieldAccessContext.js";
+import { useStore } from "../../stores/store.js";
 
 const props = defineProps({
   parentId: { type: String, required: true },
   parentCollection: { type: String, required: true },
-  linkField: { type: String, default: 'pp' },
-  taskType: { type: String, default: '' },
+  linkField: { type: String, default: "pp" },
+  taskType: { type: String, default: "" },
   linkSchemaPath: { type: [String, Array], default: () => [] },
-  showFields: { type: Array, default: () => ['*'] },
+  showFields: { type: Array, default: () => ["*"] },
   texts: { type: Object, default: () => ({}) },
   ui: { type: Object, default: () => ({}) },
 });
@@ -109,18 +107,19 @@ const globalStore = useStore();
 
 const linkSchemaPathArr = computed(() => {
   const raw = props.linkSchemaPath;
-  if (Array.isArray(raw)) return raw.map((k) => String(k).trim()).filter(Boolean);
-  const one = String(raw ?? '').trim();
+  if (Array.isArray(raw))
+    return raw.map((k) => String(k).trim()).filter(Boolean);
+  const one = String(raw ?? "").trim();
   return one ? [one] : [];
 });
 
-const phoneLinkSchemaPath = computed(() => [...linkSchemaPathArr.value, 'pp']);
+provideTaskFieldAccess(() => [...linkSchemaPathArr.value, 'pp']);
+provideTaskLinkContext({
+  getSchemaPath: () => linkSchemaPathArr.value,
+  getTaskType: () => props.taskType,
+});
 
-function ppAccessPath(field) {
-  return buildTaskAccessPath([...linkSchemaPathArr.value, 'pp', field]);
-}
-
-const showAll = computed(() => props.showFields.includes('*'));
+const showAll = computed(() => props.showFields.includes("*"));
 const shownSet = computed(() => new Set(props.showFields));
 
 function isShown(field) {
@@ -128,9 +127,10 @@ function isShown(field) {
 }
 
 const ppIds = computed(() =>
-  Object.keys(globalStore.store[props.parentCollection]?.[props.parentId]?.[props.linkField] || {}).filter(
-    Boolean,
-  ),
+  Object.keys(
+    globalStore.store[props.parentCollection]?.[props.parentId]?.[
+      props.linkField
+    ] || {},
+  ).filter(Boolean),
 );
-
 </script>
